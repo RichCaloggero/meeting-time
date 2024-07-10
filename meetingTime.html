@@ -1,0 +1,208 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Meeting Time</title>
+</head>
+<body>
+<h1>Meeting Time</h1>
+
+<nav><ul><li>
+<button data-action="create-meeting" aria-pressed="false" accesskey="c">Create proposal</button>
+</li><li>
+<button data-action="update-meeting" aria-pressed="false" accesskey="u">Update proposal</button>
+</li><li>
+<button data-action="delete-meeting" aria-pressed="false" accesskey="d">Delete proposal</button>
+</li></ul>
+
+<main>
+<form id="create-meeting" hidden>
+
+<button data-action="save-meeting-data" type="button">Submit</button>
+</form>
+
+<form id="update-meeting" hidden>
+</form>
+
+<form id="delete-meeting" hidden>
+</form>
+</main>
+
+<output id="status"></output>
+
+<script>
+const $nav = $("nav");
+const $main = $("main");
+const $status = $("#status");
+const actions = {
+"create-meeting": createMeeting,
+"update-meeting": updateMeeting,
+"delete-meeting": deleteMeeting,
+"save-meeting-data": saveMeetingData,
+"load-meeting-data": loadMeetingData,
+"add-proposal": addProposal,
+"delete-proposal": deleteProposal,
+"find-meeting": findMeeting,
+}; // actions
+
+const meetings = [];
+let proposalCount = 0;
+
+const meetingTemplate = `<div><label>Meeting ID (save this for later): <input name="meeting-id" readonly></label>
+</div>
+
+<div><label>Meeting info (name, description, URL, etc):<br>
+<textarea required name="meeting-info" rows="5" cols="80"></textarea>
+</div>
+
+<ul id="proposals"></ul>
+`; // meetingTemplate
+
+const updateMeetingTemplate = `<div>
+<label>Meeting ID: <input name="meeting-id"></label>
+<button data-action="find-meeting" type="button">Find meeting</button>
+</div>
+
+<table class="proposals"></table>
+
+<button data-action="add-proposal">Add proposal</button>
+`; // updateMeetingTemplate
+
+
+document.addEventListener("click", runAction);
+
+
+function runAction (e) {
+e.preventDefault();
+const $button = e.submitter || e.target;
+const actionId = $button.dataset.action;
+
+if ($button.hasAttribute("aria-pressed")) {
+if ($button.getAttribute("aria-pressed") === "true") return;
+reset($nav);
+$button.setAttribute("aria-pressed", "true");
+} // if
+
+const action = actions[actionId];
+console.log("action: ", actionId, action);
+if (not(action)) return; // fail silently
+
+action($button);
+$status.textContent = `running ${actionId}`;
+} // runAction
+
+
+/// actions
+
+function createMeeting () {
+hideAll();
+$("main #create-meeting").insertAdjacentHTML("afterBegin", meetingTemplate);
+
+addProposal();
+$("main #create-meeting").hidden = false;
+$("main #create-meeting [name=meeting-id]").value = generateMeetingId();
+$("main #create-meeting [name=meeting-id]").focus();
+} // createMeeting
+
+
+function updateMeeting () {
+hideAll();
+$("main #update-meeting").insertAdjacentHTML("afterBegin", updateMeetingTemplate);
+
+$("main #update-meeting").hidden = false;
+$("main #create-meeting [name=meeting-id]").focus();
+} // updateMeeting
+
+function deleteMeeting () {
+} // deleteMeeting
+
+function addProposal (proposal) {
+proposalCount += 1;
+const template = `<fieldset><legend><h3>Proposal ${proposalCount}: Date and time:</h3></legend>
+<label>Date: <input required name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input required name="time" type="time" id="proposal-time"></label>
+</fieldset>
+<br><button data-action="delete-proposal" type="button">Delete proposal ${proposalCount}</button>
+<button data-action="add-proposal" type="button">Add another timeslot</button>
+`;
+
+$("main #create-meeting #proposals").insertAdjacentHTML("beforeEnd", `<li class="proposal">${template}</li>
+`);
+
+$("main #create-meeting #proposals > .proposal:last-child [name=date]").focus();
+} // addProposal
+
+function deleteProposal ($button) {
+$proposal = $button.closest(".proposal");
+if (not($proposal)) return;
+$proposal.remove();
+proposalCount -= 1;
+if (proposalCount === 0) addProposal();
+} // deleteProposal
+
+function saveMeetingData ($button) {
+$form = $button.closest("form");
+const meeting = {};
+
+meeting.id = $form["meeting-id"].value;
+meeting.info = $form["meeting-info"].value;
+meeting.proposals = zip(getValues($form["date"]), getValues($form["time"]))
+.map(entry => ({date: entry[0], time: entry[1]}));
+
+meetings.push(meeting);
+} // saveMeeting
+
+function findMeeting ($button) {
+$meetingId = $button.closest("form [name=meeting-id]");
+if (not(meetings[$meetingId.value])) {
+statusMessage("invalid meeting ID");
+$meetingId.focus();
+return;
+} // if
+
+loadMeetingData(meetings[$meetingId.value], $meetingId.closest("form"));
+} // findMeeting
+
+
+/// utilities
+
+
+function loadMeetingData (data, $form) {
+$("[name=meeting-info]", $form).value = data.info;
+
+} // loadMeetingData
+
+function getValues (data) {
+return data.length?
+[...data].map(x => x.value)
+: [data.value];
+} // getValues
+
+function zip (a, b) {
+if (not(a.length || b.length)) alert("zip: requires arrays or objects with length");
+return a.map((x, i) => [x, b[i]]);
+} // zip
+
+function reset ($nav) {
+$nav.querySelectorAll("[aria-pressed]")
+.forEach(x => x.setAttribute("aria-pressed", "false"));
+} // reset
+
+function hideAll () {
+document.querySelectorAll("main form").forEach(x => x.hidden = true);
+} // hideAll
+
+function reset () {
+document.querySelectorAll("nav [aria-pressed]")
+.forEach(x => x.setAttribute("aria-pressed", "false"));
+} // reset
+
+function generateMeetingId () {
+return btoa(Math.random());
+} // generateMeetingId
+
+function $ (s, c = document) {return c.querySelector(s);}
+function not (x) {return !x;}
+</script>
+</body>
+</html>
