@@ -43,10 +43,20 @@ const actions = {
 "add-proposal": addProposal,
 "delete-proposal": deleteProposal,
 "find-meeting": findMeeting,
+"vote": vote,
 }; // actions
 
 const meetings = new Map();
 let proposalCount = 0;
+meetings.set("0", {
+id: "0",
+info: "some info",
+proposals: [
+{"voteCount": 1, "date":"2024-07-10","time":"11:00"},
+{"voteCount": 1, "date":"2024-07-10","time":"12:00"}
+]});
+
+
 
 const meetingTemplate = `<div><label>Meeting ID (save this for later): <input name="meeting-id" readonly></label>
 </div>
@@ -76,7 +86,6 @@ document.addEventListener("click", runAction);
 
 
 function runAction (e) {
-e.preventDefault();
 const $button = e.submitter || e.target;
 const actionId = $button.dataset.action;
 
@@ -167,6 +176,14 @@ return;
 loadMeetingData(meetings.get($meetingId.value), $form);
 } // findMeeting
 
+function vote ($button) {
+const $proposal = $button.closest(".proposal");
+$count = $(".vote-count", $proposal);
+$count.value = $button.checked?
+Number($count.value) + 1
+: Number($count.value) - 1;
+
+} // vote
 
 /// utilities
 
@@ -189,7 +206,7 @@ const dateLabel = `date-${i}`;
 const timeLabel = `time-${i}`;
 
 $(".proposals", $form).insertAdjacentHTML("beforeEnd",
-`<tr>
+`<tr class="proposal">
 <td><label> Vote for <input type="checkbox" data-action="vote" aria-describedby="${dateLabel} ${timeLabel}"</label></td>
 <td><output class="vote-count">${proposal.voteCount}</output></td>
 <td id="${dateLabel}">${proposal.date}</td>
