@@ -45,7 +45,7 @@ const actions = {
 "find-meeting": findMeeting,
 }; // actions
 
-const meetings = [];
+const meetings = new Map();
 let proposalCount = 0;
 
 const meetingTemplate = `<div><label>Meeting ID (save this for later): <input name="meeting-id" readonly></label>
@@ -62,6 +62,9 @@ const updateMeetingTemplate = `<div>
 <label>Meeting ID: <input name="meeting-id"></label>
 <button data-action="find-meeting" type="button">Find meeting</button>
 </div>
+
+<h3>Meeting Info</h3>
+<div class="meeting-info"></div>
 
 <table class="proposals"></table>
 
@@ -88,7 +91,6 @@ console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
 action($button);
-$status.textContent = `running ${actionId}`;
 } // runAction
 
 
@@ -147,20 +149,22 @@ const meeting = {};
 meeting.id = $form["meeting-id"].value;
 meeting.info = $form["meeting-info"].value;
 meeting.proposals = zip(getValues($form["date"]), getValues($form["time"]))
-.map(entry => ({date: entry[0], time: entry[1]}));
+.map(entry => ({voteCount: 1, date: entry[0], time: entry[1]}));
 
-meetings.push(meeting);
+meetings.set(meeting.id, meeting);
 } // saveMeeting
 
 function findMeeting ($button) {
-$meetingId = $button.closest("form [name=meeting-id]");
-if (not(meetings[$meetingId.value])) {
+$form = $button.closest("form");
+$meetingId = $("[name=meeting-id]", $form);
+
+if (not(meetings.has($meetingId.value))) {
 statusMessage("invalid meeting ID");
 $meetingId.focus();
 return;
 } // if
 
-loadMeetingData(meetings[$meetingId.value], $meetingId.closest("form"));
+loadMeetingData(meetings.get($meetingId.value), $form);
 } // findMeeting
 
 
@@ -168,7 +172,31 @@ loadMeetingData(meetings[$meetingId.value], $meetingId.closest("form"));
 
 
 function loadMeetingData (data, $form) {
-$("[name=meeting-info]", $form).value = data.info;
+$(".meeting-info", $form).textContent = data.info;
+
+$(".proposals", $form).insertAdjacentHTML("afterBegin",
+`<tr>
+<th>vote</th>
+<th>count</th>
+<th>date</th>
+<th>time</th>
+</tr>
+`);
+let i = 0;
+for (proposal of data.proposals) {
+i += 1;
+const dateLabel = `date-${i}`;
+const timeLabel = `time-${i}`;
+
+$(".proposals", $form).insertAdjacentHTML("beforeEnd",
+`<tr>
+<td><label> Vote for <input type="checkbox" data-action="vote" aria-describedby="${dateLabel} ${timeLabel}"</label></td>
+<td><output class="vote-count">${proposal.voteCount}</output></td>
+<td id="${dateLabel}">${proposal.date}</td>
+<td id="${timeLabel}">${proposal.time}</td>
+</tr>
+`); // insert table row
+} // for
 
 } // loadMeetingData
 
@@ -200,6 +228,10 @@ document.querySelectorAll("nav [aria-pressed]")
 function generateMeetingId () {
 return btoa(Math.random());
 } // generateMeetingId
+
+function statusMessage (text) {
+setTimeout(() => $("#status").textContent = text, 100);
+} // statusMessage
 
 function $ (s, c = document) {return c.querySelector(s);}
 function not (x) {return !x;}
