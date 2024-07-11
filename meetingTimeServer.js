@@ -27,7 +27,7 @@ optionsSuccessStatus: 200
 };
 
 app.use(express.json()) // for parsing application/json
-app.use(cors(corsOptions));
+//app.use(cors(corsOptions));
 
 
 app.get("/:name", (req, res) => {
@@ -37,19 +37,18 @@ root: path.join(process.cwd(), "html")
 });
 });
 
-app.post("/data/", cors(corsOptions), async (req, res) => {
+//app.post("/data/", cors(corsOptions), async (req, res) => {
+app.post("/data/", async (req, res) => {
 const query = req.query;
-const buffer = req.body;
-console.log(`
-got data; buffer length: ${buffer.length};
-query string: ${JSON.stringify(query)}
-data: ${buffer}
-`);
+const meetings = req.body;
+console.log("got data: ", req.json, meetings);
 
 try {
+fs.writeFileSync("meetings.json", JSON.stringify(meetings), {flush: true});
+res.json({status: true, error: ""});
 
 } catch(error) {
-res.json({error: {status: 500, data: "unknown server error"}});
+res.json({status: false, error: error});
 } // try
 
 return;

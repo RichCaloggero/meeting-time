@@ -183,7 +183,7 @@ const meeting = {};
 
 meeting.id = $form["meeting-id"].value;
 meeting.info = $form["meeting-info"].value;
-meeting.proposals = [...$proposals.querySelectorAll(".proposal")]
+meeting.proposals = $$("form .proposals .proposal")
 .map($p => ({
 voteCount: $(".vote-count", $p),
 date: $(".date", $p),
@@ -193,6 +193,8 @@ time: $(".time", $p)
 
 
 meetings.set(meeting.id, meeting);
+sendMeetingData(meetings);
+
 } // saveMeeting
 
 function findMeeting ($button, $form) {
@@ -244,7 +246,35 @@ return a.map((x, i) => [x, b[i]]);
 function resetNavigation () {
 document.querySelectorAll("nav [aria-pressed]")
 .forEach(x => x.setAttribute("aria-pressed", "false"));
-} // reset
+} // resetNavigation
+
+async function sendMeetingData (meetings) {
+console.log("sendMeetingData(): ", meetings);
+
+try {
+const res = await fetch("http://localhost:3000/data/", {
+method: "POST", 
+mode: "cors",
+headers: {
+'Accept': 'application/json',
+'Content-Type': 'application/json'
+"Cache-Control": "no-cache" 
+},
+//"origin-when-cross-origin": true,
+body: JSON.stringify(meetings)
+}); // fetch
+
+
+console.log("fetch succeeded");
+
+const data = await res.json();
+console.log("response data: ", data);
+
+} catch (e) {
+statusMessage(`fetch failed.\n${e.message}`);
+} // try
+} // saveMeetingData
+
 
 function clearForm () {
 $("main").innerHTML = "";
