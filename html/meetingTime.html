@@ -8,24 +8,14 @@
 <h1>Meeting Time</h1>
 
 <nav><ul><li>
-<button data-action="create-meeting" aria-pressed="false" accesskey="c">Create proposal</button>
+<button data-action="new-meeting" aria-pressed="false" accesskey="c">New meeting</button>
 </li><li>
-<button data-action="update-meeting" aria-pressed="false" accesskey="u">Update proposal</button>
+<button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
 </li><li>
-<button data-action="delete-meeting" aria-pressed="false" accesskey="d">Delete proposal</button>
+<button data-action="delete-meeting" aria-pressed="false" accesskey="d">Delete meeting</button>
 </li></ul>
 
 <main>
-<form id="create-meeting" hidden>
-
-<button data-action="save-meeting-data" type="button">Submit</button>
-</form>
-
-<form id="update-meeting" hidden>
-</form>
-
-<form id="delete-meeting" hidden>
-</form>
 </main>
 
 <output id="status"></output>
@@ -35,7 +25,7 @@ const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
 const actions = {
-"create-meeting": createMeeting,
+"new-meeting": newMeeting,
 "update-meeting": updateMeeting,
 "delete-meeting": deleteMeeting,
 "save-meeting-data": saveMeetingData,
@@ -47,7 +37,8 @@ const actions = {
 }; // actions
 
 const meetings = new Map();
-let proposalCount = 0;
+let meetingId = "";
+
 meetings.set("0", {
 id: "0",
 info: "some info",
@@ -65,7 +56,18 @@ const meetingTemplate = `<div><label>Meeting ID (save this for later): <input na
 <textarea required name="meeting-info" rows="5" cols="80"></textarea>
 </div>
 
-<ul id="proposals"></ul>
+<table class="proposals"><tr>
+<th>vote for</th>
+<th>count</th>
+<th>date</th>
+<th>time</th>
+</tr></table>
+
+<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
+<label>Date: <input required name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input required name="time" type="time" id="proposal-time"></label>
+<br><button data-action="add-proposal" type="button">Add proposal</button>
+</fieldset>
 `; // meetingTemplate
 
 const updateMeetingTemplate = `<div>
@@ -82,16 +84,17 @@ const updateMeetingTemplate = `<div>
 `; // updateMeetingTemplate
 
 
-document.addEventListener("click", runAction);
+document.addEventListener("click", performAction);
 
 
-function runAction (e) {
+function performAction (e) {
 const $button = e.submitter || e.target;
 const actionId = $button.dataset.action;
+const $form = $button.closest("form");
 
 if ($button.hasAttribute("aria-pressed")) {
 if ($button.getAttribute("aria-pressed") === "true") return;
-reset($nav);
+resetNavigation();
 $button.setAttribute("aria-pressed", "true");
 } // if
 
@@ -99,72 +102,100 @@ const action = actions[actionId];
 console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
-action($button);
-} // runAction
+action($button, $form);
+} // performAction
 
 
 /// actions
 
-function createMeeting () {
-hideAll();
-$("main #create-meeting").insertAdjacentHTML("afterBegin", meetingTemplate);
+function newMeeting () {
+clearForm();
+meetingId = generateMeetingId();
 
-addProposal();
-$("main #create-meeting").hidden = false;
-$("main #create-meeting [name=meeting-id]").value = generateMeetingId();
-$("main #create-meeting [name=meeting-id]").focus();
-} // createMeeting
+$("main").insertAdjacentHTML("afterBegin",
+`<form id="new-meeting" method="post">
+${meetingTemplate}
 
+<button data-action="save-meeting-data" type="button">Submit</button>
+`);
+
+$("main #new-meeting [name=meeting-id]").value = meetingId;
+$("main #new-meeting [name=meeting-id]").focus();
+} // newMeeting
 
 function updateMeeting () {
-hideAll();
-$("main #update-meeting").insertAdjacentHTML("afterBegin", updateMeetingTemplate);
+clearForm();
+$("main").insertAdjacentHTML("afterBegin", 
+`<form id="update-meeting" method="post">
+${meetingTemplate}
 
-$("main #update-meeting").hidden = false;
-$("main #create-meeting [name=meeting-id]").focus();
+<button data-action="update-meeting">Submit</button>
+</form>
+`);
+$("main form [name=meeting-id").insertAdjacentHTML("afterEnd",
+`<button data-action="find-meeting" type="button">Find meeting</button>
+`);
+
+$("form [name=meeting-id").removeAttribute("readonly");
+
+$("main [name=meeting-id]").focus();
 } // updateMeeting
 
 function deleteMeeting () {
 } // deleteMeeting
 
-function addProposal (proposal) {
-proposalCount += 1;
-const template = `<fieldset><legend><h3>Proposal ${proposalCount}: Date and time:</h3></legend>
-<label>Date: <input required name="date" type="date" id="proposal-date"></label>
-<br><label>Time: <input required name="time" type="time" id="proposal-time"></label>
-</fieldset>
-<br><button data-action="delete-proposal" type="button">Delete proposal ${proposalCount}</button>
-<button data-action="add-proposal" type="button">Add another timeslot</button>
-`;
+function addProposal ($button, $form) {
+const $proposal = $(".new-proposal", $form);
+const proposal = {
+date: $("[name=date]", $proposal).value,
+time: $("[name=time]", $proposal).value,
+voteCount: 1
+};
+const proposalCount = $$("form .proposals .proposal").length || 0;
 
-$("main #create-meeting #proposals").insertAdjacentHTML("beforeEnd", `<li class="proposal">${template}</li>
-`);
-
-$("main #create-meeting #proposals > .proposal:last-child [name=date]").focus();
+$(".proposals", $form).insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
 } // addProposal
 
-function deleteProposal ($button) {
+function createProposal (proposal, count) {
+const {date, time, voteCount} = proposal;
+const dateLabel = `date-${count}`;
+const timeLabel = `time-${count}`;
+
+return `<tr class="proposal">
+<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
+<td><output class="vote-count">${proposal.voteCount}</output></td>
+<td id="${dateLabel}">${proposal.date}</td>
+<td id="${timeLabel}">${proposal.time}</td>
+</tr>`; // proposal
+} // createProposal
+
+function deleteProposal ($button, $form) {
 $proposal = $button.closest(".proposal");
 if (not($proposal)) return;
 $proposal.remove();
 proposalCount -= 1;
-if (proposalCount === 0) addProposal();
 } // deleteProposal
 
-function saveMeetingData ($button) {
-$form = $button.closest("form");
+function saveMeetingData ($button, $form) {
+const $proposals = $(".proposals", $form);
+
 const meeting = {};
 
 meeting.id = $form["meeting-id"].value;
 meeting.info = $form["meeting-info"].value;
-meeting.proposals = zip(getValues($form["date"]), getValues($form["time"]))
-.map(entry => ({voteCount: 1, date: entry[0], time: entry[1]}));
+meeting.proposals = [...$proposals.querySelectorAll(".proposal")]
+.map($p => ({
+voteCount: $(".vote-count", $p),
+date: $(".date", $p),
+time: $(".time", $p)
+})); // map
+
+
 
 meetings.set(meeting.id, meeting);
 } // saveMeeting
 
-function findMeeting ($button) {
-$form = $button.closest("form");
+function findMeeting ($button, $form) {
 $meetingId = $("[name=meeting-id]", $form);
 
 if (not(meetings.has($meetingId.value))) {
@@ -189,38 +220,20 @@ Number($count.value) + 1
 
 
 function loadMeetingData (data, $form) {
-$(".meeting-info", $form).textContent = data.info;
+$("form [name=meeting-info]").textContent = data.info;
+$proposals = $("form .proposals");
 
-$(".proposals", $form).insertAdjacentHTML("afterBegin",
-`<tr>
-<th>vote</th>
-<th>count</th>
-<th>date</th>
-<th>time</th>
-</tr>
-`);
-let i = 0;
+let proposalCount = 0;
 for (proposal of data.proposals) {
-i += 1;
-const dateLabel = `date-${i}`;
-const timeLabel = `time-${i}`;
-
-$(".proposals", $form).insertAdjacentHTML("beforeEnd",
-`<tr class="proposal">
-<td><label> Vote for <input type="checkbox" data-action="vote" aria-describedby="${dateLabel} ${timeLabel}"</label></td>
-<td><output class="vote-count">${proposal.voteCount}</output></td>
-<td id="${dateLabel}">${proposal.date}</td>
-<td id="${timeLabel}">${proposal.time}</td>
-</tr>
-`); // insert table row
+proposalCount += 1;
+$proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
 } // for
-
 } // loadMeetingData
 
-function getValues (data) {
-return data.length?
-[...data].map(x => x.value)
-: [data.value];
+function getValues (nodeList) {
+return nodeList.length?
+[...data].map(x => x.value || x.dataset.value || x.textContent)
+: [nodeList.value || nodeList.dataset.value || nodeList.textContent];
 } // getValues
 
 function zip (a, b) {
@@ -228,19 +241,15 @@ if (not(a.length || b.length)) alert("zip: requires arrays or objects with lengt
 return a.map((x, i) => [x, b[i]]);
 } // zip
 
-function reset ($nav) {
-$nav.querySelectorAll("[aria-pressed]")
-.forEach(x => x.setAttribute("aria-pressed", "false"));
-} // reset
-
-function hideAll () {
-document.querySelectorAll("main form").forEach(x => x.hidden = true);
-} // hideAll
-
-function reset () {
+function resetNavigation () {
 document.querySelectorAll("nav [aria-pressed]")
 .forEach(x => x.setAttribute("aria-pressed", "false"));
 } // reset
+
+function clearForm () {
+$("main").innerHTML = "";
+} // clearForm
+
 
 function generateMeetingId () {
 return btoa(Math.random());
@@ -251,6 +260,8 @@ setTimeout(() => $("#status").textContent = text, 100);
 } // statusMessage
 
 function $ (s, c = document) {return c.querySelector(s);}
+function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
+
 function not (x) {return !x;}
 </script>
 </body>
