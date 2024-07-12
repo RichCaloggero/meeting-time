@@ -37,13 +37,12 @@ const actions = {
 }; // actions
 
 const meetings = new Map();
-let meetingId = "";
 
-meetings.set("0", {
-id: "0",
+meetings.set("test0", {
+id: "test0",
 info: "some info",
 proposals: [
-{"voteCount": 1, "date":"2024-07-10","time":"11:00"},
+{"voteCount": 2, "date":"2024-07-10","time":"11:00"},
 {"voteCount": 1, "date":"2024-07-10","time":"12:00"}
 ]});
 
@@ -129,7 +128,7 @@ $("main").insertAdjacentHTML("afterBegin",
 `<form id="update-meeting" method="post">
 ${meetingTemplate}
 
-<button data-action="update-meeting">Submit</button>
+<button data-action="save-meeting-data">Submit</button>
 </form>
 `);
 $("main form [name=meeting-id").insertAdjacentHTML("afterEnd",
@@ -257,8 +256,8 @@ method: "POST",
 mode: "cors",
 headers: {
 'Accept': 'application/json',
-'Content-Type': 'application/json'
-"Cache-Control": "no-cache" 
+'Content-Type': 'application/json',
+"Cache-Control": "no-cache"
 },
 //"origin-when-cross-origin": true,
 body: JSON.stringify(meetings)

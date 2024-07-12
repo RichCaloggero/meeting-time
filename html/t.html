@@ -1,0 +1,29 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>event source test</title>
+</head>
+<body>
+<output></output>
+
+<script>
+const events = new EventSource("/events/");
+
+events.addEventListener("open", e => {
+console.log("connected.");
+
+events.addEventListener("test", e => document.querySelector("output").textContent = `${e.type}: ${e.data}`);
+
+events.onmessage = message => document.querySelector("output").textContent = message;
+
+events.onerror = e => {
+console.log("error: ", e);
+events.close();
+};
+}); // connection
+
+</script>
+
+</body>
+</html>

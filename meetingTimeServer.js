@@ -30,8 +30,8 @@ app.use(express.json()) // for parsing application/json
 //app.use(cors(corsOptions));
 
 
-app.get("/:name", (req, res) => {
-//console.log("request: ", req);
+app.get("/client/:name", (req, res) => {
+console.log("request client: ", req.params.name);
 res.sendFile(req.params.name, {
 root: path.join(process.cwd(), "html")
 });
@@ -41,7 +41,7 @@ root: path.join(process.cwd(), "html")
 app.post("/data/", async (req, res) => {
 const query = req.query;
 const meetings = req.body;
-console.log("got data: ", req.json, meetings);
+console.log("got data: ", meetings);
 
 try {
 fs.writeFileSync("meetings.json", JSON.stringify(meetings), {flush: true});
@@ -53,6 +53,35 @@ res.json({status: false, error: error});
 
 return;
 }); // post
+
+app.get("/events/", async (req, res) => {
+console.log("event connection...");
+res.setHeader("Cache-Control", "no-cache");
+res.setHeader("Content-Type", "text/event-stream");
+res.setHeader("Access-Control-Allow-Origin", "*");
+res.setHeader("Connection", "keep-alive");
+res.flushHeaders(); // flush the headers to establish SSE with client
+
+let counter = 0;
+let intervalID = setInterval(() => {
+counter++;
+if (counter >= 10) {
+clearInterval(intervalID);
+res.end(); // terminates SSE session
+return;
+} // if
+
+res.write(`event: test
+data: ${JSON.stringify({num: counter})}\n\n
+`); // res.write() instead of res.send()
+    }, 1000);
+
+res.on('close', () => {
+console.log('client dropped me');
+clearInterval(intervalID);
+res.end();
+});
+});
 
 httpServer.listen(port, () => {
 console.log(`http server Listening on port ${port}`);
