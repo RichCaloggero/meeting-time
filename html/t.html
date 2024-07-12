@@ -3,25 +3,78 @@
 <head>
 <meta charset="UTF-8" />
 <title>event source test</title>
+<link rel="shortcut icon" href="#" type="image/x-icon">
 </head>
 <body>
+<div><button id="update">Update</button></div>
 <output></output>
 
 <script>
+let clientID = 0;
+document.querySelector("#update").addEventListener("click", e => update());
 const events = new EventSource("/events/");
 
 events.addEventListener("open", e => {
-console.log("connected.");
+console.log("connection established.");
 
-events.addEventListener("test", e => document.querySelector("output").textContent = `${e.type}: ${e.data}`);
 
-events.onmessage = message => document.querySelector("output").textContent = message;
+events.addEventListener("connected", e => {
+clientID = JSON.parse(e.data).id;
+//console.log("got event: ", e);
+log(`clientID: ${clientID}; event: ${e.type}: ${e.data}`)
+});
+
+events.addEventListener("update", e => {
+console.log("update: ", e.data);
+log(`update: ${e.data}`);
+});
+
+events.onmessage = message => log(message);
 
 events.onerror = e => {
 console.log("error: ", e);
 events.close();
+log("got error; closing...");
 };
+
 }); // connection
+
+
+function log (text) {
+document.querySelector("output").textContent += text + "\n";
+} // log
+
+function update () {
+console.log("updating...");
+sendMeetingData({clientID: clientID, meeting: "dummy data"});
+} // update
+
+async function sendMeetingData (meetings) {
+console.log("sendMeetingData(): ", meetings);
+
+try {
+const res = await fetch("http://localhost:3000/data/", {
+method: "POST", 
+mode: "cors",
+headers: {
+'Accept': 'application/json',
+'Content-Type': 'application/json',
+"Cache-Control": "no-cache"
+},
+//"origin-when-cross-origin": true,
+body: JSON.stringify(meetings)
+}); // fetch
+
+
+console.log("fetch succeeded");
+
+const data = await res.json();
+console.log("response data: ", data);
+
+} catch (e) {
+statusMessage(`fetch failed.\n${e.message}`);
+} // try
+} // sendMeetingData
 
 </script>
 

@@ -1,2 +1,3 @@
 @echo off
-start "meetingTimeServer" node meetingTimeServer.js
+start "meetingTimeServer" nodemon -w meetingTimeServer.js meetingTimeServer.js
+exit
