@@ -47,7 +47,6 @@ proposals: [
 ]});
 
 
-
 const meetingTemplate = `<div><label>Meeting ID (save this for later): <input name="meeting-id" readonly></label>
 </div>
 
@@ -82,8 +81,32 @@ const updateMeetingTemplate = `<div>
 <button data-action="add-proposal">Add proposal</button>
 `; // updateMeetingTemplate
 
+/// connect to server
 
+let clientID = 0;
+const server = new EventSource("/events/");
+
+server.addEventListener("open", e => statusMessage("Connecting ..."));
+
+server.addEventListener("connected", e => {
+const data = JSON.parse(e.data);
+clientID = data.id;
+loadAllMeetings(data.meetings, meetings);
 document.addEventListener("click", performAction);
+statusMessage("connected.");
+}); // connected
+
+server.addEventListener("update", e => {
+data = JSON.parse(e.data);
+console.log("update: ", data);
+meetings.set(data.meeting.id, data.meeting);
+}); // update
+
+function loadAllMeetings (list, map) {
+for (const meeting of list) {
+map.set(meeting.id, meeting);
+} // for
+} // loadAllMeetings
 
 
 function performAction (e) {
@@ -163,8 +186,8 @@ const timeLabel = `time-${count}`;
 return `<tr class="proposal">
 <td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
 <td><output class="vote-count">${proposal.voteCount}</output></td>
-<td id="${dateLabel}">${proposal.date}</td>
-<td id="${timeLabel}">${proposal.time}</td>
+<td class="date" id="${dateLabel}">${proposal.date}</td>
+<td class="time" id="${timeLabel}">${proposal.time}</td>
 </tr>`; // proposal
 } // createProposal
 
@@ -183,17 +206,19 @@ const meeting = {};
 meeting.id = $form["meeting-id"].value;
 meeting.info = $form["meeting-info"].value;
 meeting.proposals = $$("form .proposals .proposal")
-.map($p => ({
-voteCount: $(".vote-count", $p),
-date: $(".date", $p),
-time: $(".time", $p)
-})); // map
+.map($p => {
+return {
+voteCount: Number($(".vote-count", $p).textContent),
+date: $(".date", $p).textContent,
+time: $(".time", $p).textContent
+};
+}); // map
 
 
 
 meetings.set(meeting.id, meeting);
-sendMeetingData(meetings);
 
+sendMeetingData(meeting);
 } // saveMeeting
 
 function findMeeting ($button, $form) {
@@ -247,33 +272,6 @@ document.querySelectorAll("nav [aria-pressed]")
 .forEach(x => x.setAttribute("aria-pressed", "false"));
 } // resetNavigation
 
-async function sendMeetingData (meetings) {
-console.log("sendMeetingData(): ", meetings);
-
-try {
-const res = await fetch("http://localhost:3000/data/", {
-method: "POST", 
-mode: "cors",
-headers: {
-'Accept': 'application/json',
-'Content-Type': 'application/json',
-"Cache-Control": "no-cache"
-},
-//"origin-when-cross-origin": true,
-body: JSON.stringify(meetings)
-}); // fetch
-
-
-console.log("fetch succeeded");
-
-const data = await res.json();
-console.log("response data: ", data);
-
-} catch (e) {
-statusMessage(`fetch failed.\n${e.message}`);
-} // try
-} // saveMeetingData
-
 
 function clearForm () {
 $("main").innerHTML = "";
@@ -292,6 +290,42 @@ function $ (s, c = document) {return c.querySelector(s);}
 function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
 
 function not (x) {return !x;}
+
+/// server stuff
+
+async function sendMeetingData (meeting) {
+console.log("sendMeetingData(): ", clientID, meeting);
+if (clientID === 0) {
+statusMessage("Connection to server not established.");
+return;
+} // if
+
+try {
+const res = await fetch("http://localhost:3000/data/", {
+method: "POST", 
+mode: "cors",
+headers: {
+'Accept': 'application/json',
+'Content-Type': 'application/json',
+"Cache-Control": "no-cache"
+},
+//"origin-when-cross-origin": true,
+body: JSON.stringify({clientID: clientID, meeting})
+}); // fetch
+
+
+console.log("fetch succeeded");
+
+const responseData = await res.json();
+console.log("response data: ", responseData);
+
+} catch (e) {
+statusMessage(`fetch failed.\n${e.message}`);
+} // try
+} // sendMeetingData
+
+
+
 </script>
 </body>
 </html>

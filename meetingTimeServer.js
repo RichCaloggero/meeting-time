@@ -33,6 +33,7 @@ optionsSuccessStatus: 200
 app.use(express.json()) // for parsing application/json
 //app.use(cors(corsOptions));
 
+loadMeetingData("meetings.json", meetings);
 
 app.get("/client/:name", (req, res) => {
 console.log("request client: ", req.params.name);
@@ -45,7 +46,7 @@ root: path.join(process.cwd(), "html")
 app.post("/data/", async (req, res) => {
 const query = req.query;
 const data = req.body;
-console.log("got data: ", data);
+//console.log("got data: ", data);
 updateMeetingList(data.meeting);
 respondToClients(data.clientID, data.meeting);
 
@@ -62,7 +63,7 @@ return;
 
 app.get("/events/", async (req, res) => {
 const clientID = clientInit (res);
-sendClientEvent(res, "connected", {id: clientID});
+sendClientEvent(res, "connected", {id: clientID, meetings: [...meetings.values()]});
 
 console.log(`client ${clientID} connected.`);
 
@@ -85,6 +86,7 @@ console.log(`http server Listening on port ${port}`);
 });
 
 function updateMeetingList (meeting) {
+//console.log("updateMeetingList: ", meeting);
 meetings.set(meeting.id, meeting);
 } // updateMeetingList
 
@@ -92,7 +94,7 @@ function respondToClients (clientID, data) {
 // respond to all others
 clientMap.forEach((clientData, id) => {
 if (id !== clientID) {
-sendClientEvent(clientMap.get(id).res, "update", {id, from: clientID, data});
+sendClientEvent(clientMap.get(id).res, "update", {id, from: clientID, meeting: data});
 } // if
 }); // forEach
 } // respondToClients
@@ -118,6 +120,14 @@ data: ${isString(data)? data : JSON.stringify(data)}
 \n`);
 } // if
 } // sendClientEvent
+
+function loadMeetingData (file, map) {
+const list = JSON.parse(fs.readFileSync(file));
+for (const meeting of list) {
+map.set(meeting.id, meeting);
+} // for
+console.log(`${list.length} items loaded.`);
+} // loadMeetingData
 
 function isString (x) {return typeof(x) === "string" || (x instanceof String);} 
 function not(x) {return !x;}
