@@ -21,6 +21,7 @@
 <output id="status"></output>
 
 <script>
+const origin = "";
 const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
@@ -54,6 +55,7 @@ const meetingTemplate = `<div><label>Meeting ID (save this for later): <input na
 <textarea required name="meeting-info" rows="5" cols="80"></textarea>
 </div>
 
+<h3>Current proposals</h3>
 <table class="proposals"><tr>
 <th>vote for</th>
 <th>count</th>
@@ -62,8 +64,8 @@ const meetingTemplate = `<div><label>Meeting ID (save this for later): <input na
 </tr></table>
 
 <fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input required name="date" type="date" id="proposal-date"></label>
-<br><label>Time: <input required name="time" type="time" id="proposal-time"></label>
+<label>Date: <input name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input name="time" type="time" id="proposal-time"></label>
 <br><button data-action="add-proposal" type="button">Add proposal</button>
 </fieldset>
 `; // meetingTemplate
@@ -84,9 +86,12 @@ const updateMeetingTemplate = `<div>
 /// connect to server
 
 let clientID = 0;
-const server = new EventSource("/events/");
+const server = new EventSource(`${origin}/events`);
 
-server.addEventListener("open", e => statusMessage("Connecting ..."));
+server.addEventListener("open", e => {
+console.log("connecting...");
+statusMessage("Connecting ...")
+});
 
 server.addEventListener("connected", e => {
 const data = JSON.parse(e.data);
@@ -102,6 +107,7 @@ console.log("update: ", data);
 meetings.set(data.meeting.id, data.meeting);
 }); // update
 
+server.onerror = e => statusMessage("unknown error from server");
 function loadAllMeetings (list, map) {
 for (const meeting of list) {
 map.set(meeting.id, meeting);
@@ -231,6 +237,7 @@ return;
 } // if
 
 loadMeetingData(meetings.get($meetingId.value), $form);
+$("form [name=meeting-info]").focus();
 } // findMeeting
 
 function vote ($button) {
@@ -283,7 +290,7 @@ return btoa(Math.random());
 } // generateMeetingId
 
 function statusMessage (text) {
-setTimeout(() => $("#status").textContent = text, 100);
+setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
 
 function $ (s, c = document) {return c.querySelector(s);}
@@ -301,7 +308,7 @@ return;
 } // if
 
 try {
-const res = await fetch("http://localhost:3000/data/", {
+const res = await fetch(`${origin}/data`, {
 method: "POST", 
 mode: "cors",
 headers: {
