@@ -80,7 +80,7 @@ const updateMeetingTemplate = `<div>
 
 <table class="proposals"></table>
 
-<button data-action="add-proposal">Add proposal</button>
+<button data-action="add-proposal" type="button">Add proposal</button>
 `; // updateMeetingTemplate
 
 /// connect to server
@@ -99,12 +99,14 @@ clientID = data.id;
 loadAllMeetings(data.meetings, meetings);
 document.addEventListener("click", performAction);
 statusMessage("connected.");
+if (isUpdateRequest()) updateMeeting();
 }); // connected
 
 server.addEventListener("update", e => {
 data = JSON.parse(e.data);
 console.log("update: ", data);
 meetings.set(data.meeting.id, data.meeting);
+if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge();
 }); // update
 
 server.onerror = e => statusMessage("unknown error from server");
@@ -116,21 +118,21 @@ map.set(meeting.id, meeting);
 
 
 function performAction (e) {
-const $button = e.submitter || e.target;
-const actionId = $button.dataset.action;
-const $form = $button.closest("form");
+const $action = e.submitter || e.target;
+const actionId = $action.dataset.action;
+const $form = $action.closest("form");
 
-if ($button.hasAttribute("aria-pressed")) {
-if ($button.getAttribute("aria-pressed") === "true") return;
+if ($action.hasAttribute("aria-pressed")) {
+if ($action.getAttribute("aria-pressed") === "true") return;
 resetNavigation();
-$button.setAttribute("aria-pressed", "true");
+$action.setAttribute("aria-pressed", "true");
 } // if
 
 const action = actions[actionId];
 console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
-action($button, $form);
+action({$action, $form, update: getUpdateRequest()});
 } // performAction
 
 
@@ -153,27 +155,35 @@ $("main #new-meeting [name=meeting-id]").focus();
 
 function updateMeeting () {
 clearForm();
+
 $("main").insertAdjacentHTML("afterBegin", 
 `<form id="update-meeting" method="post">
 ${meetingTemplate}
 
-<button data-action="save-meeting-data">Submit</button>
+<button data-action="save-meeting-data" type="button">Submit</button>
 </form>
 `);
+
+if (isUpdateRequest()) {
+$("form")["meeting-id"].value = getUpdateRequest();
+findMeeting();
+
+} else {
 $("main form [name=meeting-id").insertAdjacentHTML("afterEnd",
 `<button data-action="find-meeting" type="button">Find meeting</button>
 `);
+} // if
 
 $("form [name=meeting-id").removeAttribute("readonly");
 
-$("main [name=meeting-id]").focus();
+$("form")["meeting-info"].focus();
 } // updateMeeting
 
 function deleteMeeting () {
 } // deleteMeeting
 
-function addProposal ($button, $form) {
-const $proposal = $(".new-proposal", $form);
+function addProposal () {
+const $proposal = $("form .new-proposal");
 const proposal = {
 date: $("[name=date]", $proposal).value,
 time: $("[name=time]", $proposal).value,
@@ -181,7 +191,7 @@ voteCount: 1
 };
 const proposalCount = $$("form .proposals .proposal").length || 0;
 
-$(".proposals", $form).insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
+$("form .proposals").insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
 } // addProposal
 
 function createProposal (proposal, count) {
@@ -204,13 +214,13 @@ $proposal.remove();
 proposalCount -= 1;
 } // deleteProposal
 
-function saveMeetingData ($button, $form) {
-const $proposals = $(".proposals", $form);
+function saveMeetingData (data) {
+const $proposals = $("form .proposals");
 
 const meeting = {};
 
-meeting.id = $form["meeting-id"].value;
-meeting.info = $form["meeting-info"].value;
+meeting.id = $("form")["meeting-id"].value;
+meeting.info = $("form")["meeting-info"].value;
 meeting.proposals = $$("form .proposals .proposal")
 .map($p => {
 return {
@@ -221,14 +231,12 @@ time: $(".time", $p).textContent
 }); // map
 
 
-
 meetings.set(meeting.id, meeting);
-
 sendMeetingData(meeting);
 } // saveMeeting
 
-function findMeeting ($button, $form) {
-$meetingId = $("[name=meeting-id]", $form);
+function findMeeting () {
+$meetingId = $("form")["meeting-id"];
 
 if (not(meetings.has($meetingId.value))) {
 statusMessage("invalid meeting ID");
@@ -236,14 +244,16 @@ $meetingId.focus();
 return;
 } // if
 
-loadMeetingData(meetings.get($meetingId.value), $form);
-$("form [name=meeting-info]").focus();
+loadMeetingData(meetings.get($meetingId.value));
+$("form")["meeting-info"].focus();
 } // findMeeting
 
-function vote ($button) {
-const $proposal = $button.closest(".proposal");
+function vote (data) {
+$action = data.$action;
+
+const $proposal = $action.closest(".proposal");
 $count = $(".vote-count", $proposal);
-$count.value = $button.checked?
+$count.value = $action.checked?
 Number($count.value) + 1
 : Number($count.value) - 1;
 
@@ -252,15 +262,22 @@ Number($count.value) + 1
 /// utilities
 
 
-function loadMeetingData (data, $form) {
-$("form [name=meeting-info]").textContent = data.info;
+function loadMeetingData (data) {
+$("form")["meeting-info"].textContent = data.info;
 $proposals = $("form .proposals");
 
 let proposalCount = 0;
-for (proposal of data.proposals) {
+for (proposal of data.proposals.sort(orderByVoteCount)) {
 proposalCount += 1;
 $proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
 } // for
+
+function orderByVoteCount (p1, p2) {
+const n1 = p1.voteCount, n2 = p2.voteCount;
+return n1 < n2? 1 // largest first
+: n1 > n2? -1
+: 0;
+} // orderByVoteCount
 } // loadMeetingData
 
 function getValues (nodeList) {
@@ -289,6 +306,25 @@ function generateMeetingId () {
 return btoa(Math.random());
 } // generateMeetingId
 
+function isUpdateRequest () {
+const url = new URL(location);
+return url.searchParams.has("update");
+} // isUpdateRequest
+
+function getUpdateRequest () {
+return isUpdateRequest()?
+new URL(location).searchParams.get("update") : "";
+} // getUpdateRequest
+
+function isUpdateMode () {
+return $("form#update-meeting");
+} // isUpdateMode
+
+function merge () {
+statusMessage("someone else updated this meeting - reloading (changes may be lost)");
+updateMeeting();
+} // merge
+
 function statusMessage (text) {
 setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
@@ -310,7 +346,7 @@ return;
 try {
 const res = await fetch(`${origin}/data`, {
 method: "POST", 
-mode: "cors",
+//mode: "cors",
 headers: {
 'Accept': 'application/json',
 'Content-Type': 'application/json',
