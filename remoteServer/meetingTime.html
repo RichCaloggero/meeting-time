@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <title>Meeting Time</title>
+<link rel="shortcut icon" href="#" type="image/x-icon">
 </head>
 <body>
 <h1>Meeting Time</h1>
@@ -21,6 +22,7 @@
 <output id="status"></output>
 
 <script>
+const origin = "/meetingTime";
 const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
@@ -47,47 +49,36 @@ proposals: [
 ]});
 
 
-const meetingTemplate = `<div><label>Meeting ID (save this for later): <input name="meeting-id" readonly></label>
+const meetingTemplate = `<div>
+<label>Meeting ID (save this for later): <input class="meeting-id" name="meeting-id" readonly></label>
 </div>
 
-<div><label>Meeting info (name, description, URL, etc):<br>
-<textarea required name="meeting-info" rows="5" cols="80"></textarea>
+<div><label>Meeting info:<br>
+<textarea required class="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
 </div>
 
+<h3>Current proposals</h3>
 <table class="proposals"><tr>
-<th>vote for</th>
+<th>vote</th>
 <th>count</th>
 <th>date</th>
 <th>time</th>
 </tr></table>
 
 <fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input required name="date" type="date" id="proposal-date"></label>
-<br><label>Time: <input required name="time" type="time" id="proposal-time"></label>
+<label>Date: <input id="date" name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input id="time" name="time" type="time" id="proposal-time"></label>
 <br><button data-action="add-proposal" type="button">Add proposal</button>
 </fieldset>
 `; // meetingTemplate
 
-const updateMeetingTemplate = `<div>
-<label>Meeting ID: <input name="meeting-id"></label>
-<button data-action="find-meeting" type="button">Find meeting</button>
-</div>
-
-<h3>Meeting Info</h3>
-<div class="meeting-info"></div>
-
-<table class="proposals"></table>
-
-<button data-action="add-proposal">Add proposal</button>
-`; // updateMeetingTemplate
-
 /// connect to server
 
 let clientID = 0;
-const server = new EventSource("/meetingTime/events");
+const server = new EventSource(`${origin}/events`);
 
 server.addEventListener("open", e => {
-console.log("connecting...");
+//console.log("connecting...");
 statusMessage("Connecting ...")
 });
 
@@ -97,15 +88,19 @@ clientID = data.id;
 loadAllMeetings(data.meetings, meetings);
 document.addEventListener("click", performAction);
 statusMessage("connected.");
+if (isUpdateRequest()) updateMeeting();
 }); // connected
 
 server.addEventListener("update", e => {
 data = JSON.parse(e.data);
-console.log("update: ", data);
+//console.log("update: ", data);
 meetings.set(data.meeting.id, data.meeting);
+if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge(data.meeting);
 }); // update
 
-server.onerror = e => statusMessage("unknown error from server");
+server.onerror = e => statusMessage(`error from server:\n${e}`);
+
+
 function loadAllMeetings (list, map) {
 for (const meeting of list) {
 map.set(meeting.id, meeting);
@@ -114,21 +109,21 @@ map.set(meeting.id, meeting);
 
 
 function performAction (e) {
-const $button = e.submitter || e.target;
-const actionId = $button.dataset.action;
-const $form = $button.closest("form");
+const $action = e.submitter || e.target;
+const actionId = $action.dataset.action;
+const $form = $action.closest("form");
 
-if ($button.hasAttribute("aria-pressed")) {
-if ($button.getAttribute("aria-pressed") === "true") return;
+if ($action.hasAttribute("aria-pressed")) {
+if ($action.getAttribute("aria-pressed") === "true") return;
 resetNavigation();
-$button.setAttribute("aria-pressed", "true");
+$action.setAttribute("aria-pressed", "true");
 } // if
 
 const action = actions[actionId];
-console.log("action: ", actionId, action);
+//console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
-action($button, $form);
+action({$action, $form, update: getUpdateRequest()});
 } // performAction
 
 
@@ -151,27 +146,35 @@ $("main #new-meeting [name=meeting-id]").focus();
 
 function updateMeeting () {
 clearForm();
+
 $("main").insertAdjacentHTML("afterBegin", 
-`<form id="update-meeting" method="post">
+`<form id="update-meeting">
 ${meetingTemplate}
 
-<button data-action="save-meeting-data">Submit</button>
+<button data-action="save-meeting-data" type="button">Submit</button>
 </form>
 `);
-$("main form [name=meeting-id").insertAdjacentHTML("afterEnd",
+
+if (isUpdateRequest()) {
+$("form")["meeting-id"].value = getUpdateRequest();
+if (not(findMeeting())) return;
+
+} else {
+$("form [name=meeting-id").removeAttribute("readonly");
+$("form [name=meeting-id").insertAdjacentHTML("afterEnd",
 `<button data-action="find-meeting" type="button">Find meeting</button>
 `);
+} // if
 
-$("form [name=meeting-id").removeAttribute("readonly");
 
-$("main [name=meeting-id]").focus();
+$("form")["meeting-info"].focus();
 } // updateMeeting
 
 function deleteMeeting () {
 } // deleteMeeting
 
-function addProposal ($button, $form) {
-const $proposal = $(".new-proposal", $form);
+function addProposal () {
+const $proposal = $("form .new-proposal");
 const proposal = {
 date: $("[name=date]", $proposal).value,
 time: $("[name=time]", $proposal).value,
@@ -179,7 +182,7 @@ voteCount: 1
 };
 const proposalCount = $$("form .proposals .proposal").length || 0;
 
-$(".proposals", $form).insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
+$("form .proposals").insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
 } // addProposal
 
 function createProposal (proposal, count) {
@@ -188,12 +191,22 @@ const dateLabel = `date-${count}`;
 const timeLabel = `time-${count}`;
 
 return `<tr class="proposal">
-<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
+<!--<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
+-->
+<td><input type="checkbox" data-action="vote"
+aria-label="${createLabel(proposal.voteCount, proposal.date, proposal.time)}">
+</td>
+
+
 <td><output class="vote-count">${proposal.voteCount}</output></td>
 <td class="date" id="${dateLabel}">${proposal.date}</td>
 <td class="time" id="${timeLabel}">${proposal.time}</td>
 </tr>`; // proposal
 } // createProposal
+
+function createLabel (voteCount, date, time) {
+return `currently ${voteCount} votes for ${time}, on ${date}`;
+} // createLabel
 
 function deleteProposal ($button, $form) {
 $proposal = $button.closest(".proposal");
@@ -202,13 +215,13 @@ $proposal.remove();
 proposalCount -= 1;
 } // deleteProposal
 
-function saveMeetingData ($button, $form) {
-const $proposals = $(".proposals", $form);
+function saveMeetingData (data) {
+const $proposals = $("form .proposals");
 
 const meeting = {};
 
-meeting.id = $form["meeting-id"].value;
-meeting.info = $form["meeting-info"].value;
+meeting.id = $("form")["meeting-id"].value;
+meeting.info = $("form")["meeting-info"].value;
 meeting.proposals = $$("form .proposals .proposal")
 .map($p => {
 return {
@@ -219,57 +232,56 @@ time: $(".time", $p).textContent
 }); // map
 
 
-
 meetings.set(meeting.id, meeting);
-
 sendMeetingData(meeting);
 } // saveMeeting
 
-function findMeeting ($button, $form) {
-$meetingId = $("[name=meeting-id]", $form);
+function findMeeting () {
+$meetingId = $("form")["meeting-id"];
 
 if (not(meetings.has($meetingId.value))) {
 statusMessage("invalid meeting ID");
 $meetingId.focus();
-return;
+return false;
 } // if
 
-loadMeetingData(meetings.get($meetingId.value), $form);
+loadMeetingData(meetings.get($meetingId.value));
+$("form")["meeting-info"].focus();
+return true;
 } // findMeeting
 
-function vote ($button) {
-const $proposal = $button.closest(".proposal");
+function vote (data) {
+$action = data.$action; // the specific checkbox
+
+const $proposal = $action.closest(".proposal");
 $count = $(".vote-count", $proposal);
-$count.value = $button.checked?
+$count.value = $action.checked?
 Number($count.value) + 1
 : Number($count.value) - 1;
-
+$action.setAttribute("aria-label", createLabel($count.value, date($proposal), time($proposal)));
 } // vote
 
 /// utilities
 
 
-function loadMeetingData (data, $form) {
-$("form [name=meeting-info]").textContent = data.info;
-$proposals = $("form .proposals");
+function loadMeetingData (data) {
+$get("meeting-info")[0].value = data.info;
+
+$proposals = $get("proposals")[0];
 
 let proposalCount = 0;
-for (proposal of data.proposals) {
+for (proposal of data.proposals.sort(orderByVoteCount)) {
 proposalCount += 1;
 $proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
 } // for
+
+function orderByVoteCount (p1, p2) {
+const n1 = p1.voteCount, n2 = p2.voteCount;
+return n1 < n2? 1 // largest first
+: n1 > n2? -1
+: 0;
+} // orderByVoteCount
 } // loadMeetingData
-
-function getValues (nodeList) {
-return nodeList.length?
-[...data].map(x => x.value || x.dataset.value || x.textContent)
-: [nodeList.value || nodeList.dataset.value || nodeList.textContent];
-} // getValues
-
-function zip (a, b) {
-if (not(a.length || b.length)) alert("zip: requires arrays or objects with length");
-return a.map((x, i) => [x, b[i]]);
-} // zip
 
 function resetNavigation () {
 document.querySelectorAll("nav [aria-pressed]")
@@ -286,9 +298,63 @@ function generateMeetingId () {
 return btoa(Math.random());
 } // generateMeetingId
 
+function isUpdateRequest () {
+const url = new URL(location);
+return url.searchParams.has("update");
+} // isUpdateRequest
+
+function getUpdateRequest () {
+return isUpdateRequest()?
+new URL(location).searchParams.get("update") : "";
+} // getUpdateRequest
+
+function isUpdateMode () {
+return $("form#update-meeting");
+} // isUpdateMode
+
+function merge (data) {
+statusMessage("someone else updated this meeting - reloading (changes may be lost)");
+$get("proposals")[0].innerHTML = "";
+loadMeetingData(data);
+} // merge
+
+function integrateMeetingData (data) {
+$("form")["meeting-info"].value = data.info;
+
+for (proposal of data.proposals) {
+const $proposal =  findProposal($$("form .proposal"), data.date, data.time);
+if ($proposal && $("input", $proposal).checked) proposal.voteCount += 1;
+} // for
+$("form .proposals").innerHTML = "";
+
+loadMeetingData(data);
+} // integrateMeetingData
+
+function findProposal (list, date, time) {
+if (list[0].matches("tr")) return list.find(
+$tr => $(".date", $tr).textContent === date
+&& $(".time", $tr).textContent === time
+);
+else return list.find(
+p => p.date === date && p.time === time
+);
+} // findProposal
+
 function statusMessage (text) {
-setTimeout(() => $("#status").textContent = text, 100);
+setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
+
+/// accessors
+
+function $get(name) {return $$(`form .${name}`);}
+function valueOf (name) {
+return $get(name)
+.map(x => x.value || x.textContent);
+} // valueOf
+function date ($proposal) {return $(".date", $proposal).textContent;}
+function time($proposal) {return $(".time", $proposal).textContent;}
+function voteCount ($proposal) {return Number($(".vote-count", $proposal).textContent);}
+
 
 function $ (s, c = document) {return c.querySelector(s);}
 function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
@@ -298,16 +364,16 @@ function not (x) {return !x;}
 /// server stuff
 
 async function sendMeetingData (meeting) {
-console.log("sendMeetingData(): ", clientID, meeting);
+//console.log("sendMeetingData(): ", clientID, meeting);
 if (clientID === 0) {
 statusMessage("Connection to server not established.");
 return;
 } // if
 
 try {
-const res = await fetch("/meetingTime/data", {
+const res = await fetch(`${origin}/data`, {
 method: "POST", 
-mode: "cors",
+//mode: "cors",
 headers: {
 'Accept': 'application/json',
 'Content-Type': 'application/json',
@@ -318,10 +384,10 @@ body: JSON.stringify({clientID: clientID, meeting})
 }); // fetch
 
 
-console.log("fetch succeeded");
+//console.log("fetch succeeded");
 
 const responseData = await res.json();
-console.log("response data: ", responseData);
+//console.log("response data: ", responseData);
 
 } catch (e) {
 statusMessage(`fetch failed.\n${e.message}`);
