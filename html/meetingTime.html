@@ -44,8 +44,8 @@ meetings.set("test0", {
 id: "test0",
 info: "some info",
 proposals: [
-{voteCount: 2, timestamp: new Date("2024-07-10T11:00")},
-{voteCount: 1, timestamp: new Date("2024-07-10T12:00")},
+{voteCount: 2, timestamp: toTimestamp("2024-07-10", "12:00:00")},
+{voteCount: 1, timestamp: toTimestamp("2024-07-10", "11:00:00")}
 ]});
 
 
@@ -175,16 +175,24 @@ function deleteMeeting () {
 
 function addProposal () {
 const $proposal = $("form .new-proposal");
+const date = $(".new-proposal #date").value;
+const time = $(".new-proposal #time").value;
+const timestamp = toTimestamp(date, time);
+const meeting = meetings.get(valueOf("meeting-id")[0]);
+
+if (meeting.proposals.find(p => p.timestamp === timestamp)) {
+statusMessage("timeslot already proposed.");
+return;
+} // if
+
 const proposal = {
-date: $(".new-proposal #date").value,
-time: $(".new-proposal #time").value,
-voteCount: 1
+timestamp, voteCount: 1,
 };
-proposal.timestamp = new Date(`${proposal.date}T${proposal.time}`);
 
 const proposalCount = $$get("proposal").length;
 
 $("form .proposals").insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
+saveMeetingData();
 } // addProposal
 
 function createProposal (proposal, count) {
@@ -220,22 +228,20 @@ $proposal.remove();
 proposalCount -= 1;
 } // deleteProposal
 
-function saveMeetingData (data) {
+function saveMeetingData () {
 const $proposals = $("form .proposals");
 
 const meeting = {};
 
-meeting.id = $("form")["meeting-id"].value;
-meeting.info = $("form")["meeting-info"].value;
-meeting.proposals = $$("form .proposals .proposal")
+meeting.id = valueOf("meeting-id")[0];
+meeting.info = valueOf("meeting-info")[0];
+meeting.proposals = $$get("proposal")
 .map($p => {
 return {
-voteCount: Number($(".vote-count", $p).textContent),
-date: $(".date", $p).textContent,
-time: $(".time", $p).textContent
+voteCount: voteCount($p),
+timestamp: toTimestamp(date($p), time($p))
 };
 }); // map
-
 
 meetings.set(meeting.id, meeting);
 sendMeetingData(meeting);
@@ -267,7 +273,6 @@ $action.setAttribute("aria-label", createLabel($count.value, date($proposal), ti
 } // vote
 
 /// utilities
-
 
 function loadMeetingData (data) {
 $$get("meeting-info")[0].value = data.info;
@@ -351,15 +356,34 @@ setTimeout(() => $("#status").textContent = text, 200);
 
 /// accessors
 
-function $$get(name) {return $$(`form .${name}`);}
-function valueOf (name) {
-return $$get(name)
+function $$get(selector) {
+const elements = $$(`form ${selector}`);
+return elements && elements.length > 0?
+elements : $$(`form .${selector}`);
+} // $$get
+
+function valueOf (selector) {
+return $$get(selector)
 .map(x => x.value || x.textContent);
 } // valueOf
-function date ($proposal) {return $(".date", $proposal).textContent;}
-function time ($proposal) {return $(".time", $proposal).textContent;}
+function date ($proposal) {
+return $proposal.matches("#new-proposal")?
+$("#date", $proposal).value : $(".date", $proposal).textContent;
+} // date
+
+function time ($proposal) {
+return $proposal.matches("#new-proposal")?
+$("#time", $proposal).value : $(".time", $proposal).textContent;
+} // date
+
 function voteCount ($proposal) {return Number($(".vote-count", $proposal).textContent);}
 
+function toTimestamp (date, time) {
+return Date.parse(`${date} ${time}`);
+} // toTimestamp
+
+function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
+function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
 
 function $ (s, c = document) {return c.querySelector(s);}
 function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
