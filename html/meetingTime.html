@@ -50,7 +50,8 @@ proposals: [
 
 
 const meetingTemplate = `<div>
-<label>Meeting ID (save this for later): <input class="meeting-id" name="meeting-id" readonly></label>
+<label>Meeting ID: <input class="meeting-id" name="meeting-id" readonly></label>
+<span hidden id="id-description">copy to clipboard and eMail to other participants</span>
 </div>
 
 <div><label>Meeting info:<br>
@@ -136,13 +137,17 @@ meetingId = generateMeetingId();
 $("main").insertAdjacentHTML("afterBegin",
 `<form id="new-meeting" method="post">
 ${meetingTemplate}
-
 <button data-action="save-meeting-data" type="button">Submit</button>
 `);
 
-$("main #new-meeting [name=meeting-id]").value = meetingId;
-$("main #new-meeting [name=meeting-id]").focus();
+$(".meeting-id").setAttribute("aria-describedby", "id-description");
+$("#id-description").hidden = false;
+
+$(".meeting-id").value = generateURL(meetingId);
+$(".meeting-id").select();
+$(".meeting-id").focus();
 } // newMeeting
+
 
 function updateMeeting () {
 clearForm();
@@ -353,6 +358,11 @@ p => p.date === date && p.time === time
 function statusMessage (text) {
 setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
+
+function generateURL (id) {
+const url = location.toString();
+return `${url.split("?")[0]}?update=${id}`;
+} // generateURL
 
 /// accessors
 
