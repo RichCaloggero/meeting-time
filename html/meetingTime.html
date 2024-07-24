@@ -6,17 +6,38 @@
 <link rel="shortcut icon" href="#" type="image/x-icon">
 </head>
 <body>
-<h1>Meeting Time</h1>
 
 <nav><ul><li>
-<button data-action="new-meeting" aria-pressed="false" accesskey="c">New meeting</button>
-</li><li>
-<button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
-</li><li>
-<button data-action="delete-meeting" aria-pressed="false" accesskey="d">Delete meeting</button>
-</li></ul>
+<button data-action="new-meeting" accesskey="n">New meeting</button>
+</li>
+<!--<li><button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
+</li>
+<li><button data-action="delete-meeting" accesskey="d">Delete meeting</button>
+</li>
+-->
+</ul>
 
 <main>
+<h1 id="meetingtime">MeetingTime</h1>
+<p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
+<h2 id="operation">Operation</h2>
+<ul>
+<li>Click "New meeting" to create an entry
+<ul>
+<li>the URL shown as the meeting ID must be copied and saved</li>
+<li>the creator is responsible for providing this URL to all other participants</li>
+<li>click "submit" to create the entry</li>
+</ul></li>
+<li>Updating
+<ul>
+<li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
+<li>proposals sort with highest vote count first</li>
+<li>Click "submit" to update the entry</li>
+</ul></li>
+<li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
+</ul>
+<h2 id="concurrent-updates">Concurrent updates</h2>
+<p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
 </main>
 
 <output id="status"></output>
@@ -142,7 +163,7 @@ ${meetingTemplate}
 
 $(".meeting-id").setAttribute("aria-describedby", "id-description");
 $("#id-description").hidden = false;
-
+$(".meeting-id").dataset.value = meetingId;
 $(".meeting-id").value = generateURL(meetingId);
 $(".meeting-id").select();
 $(".meeting-id").focus();
@@ -182,10 +203,19 @@ function addProposal () {
 const $proposal = $("form .new-proposal");
 const date = $(".new-proposal #date").value;
 const time = $(".new-proposal #time").value;
-const timestamp = toTimestamp(date, time);
-const meeting = meetings.get(valueOf("meeting-id")[0]);
+if (not(date) || not(time)) {
+statusMessage("invalid timeslot");
+return;
+} // if
 
-if (meeting.proposals.find(p => p.timestamp === timestamp)) {
+const timestamp = toTimestamp(date, time);
+if (not(Number.isInteger(timestamp))) {
+statusMessage("invalid date or time");
+return;
+} // if
+
+const $p =  findProposal($$("form .proposal"), date, time);
+if ($p) {
 statusMessage("timeslot already proposed.");
 return;
 } // if
@@ -233,12 +263,12 @@ $proposal.remove();
 proposalCount -= 1;
 } // deleteProposal
 
-function saveMeetingData () {
+function saveMeetingData (actionData) {
 const $proposals = $("form .proposals");
 
 const meeting = {};
 
-meeting.id = valueOf("meeting-id")[0];
+meeting.id = $(".meeting-id").dataset.value;
 meeting.info = valueOf("meeting-info")[0];
 meeting.proposals = $$get("proposal")
 .map($p => {
@@ -249,6 +279,10 @@ timestamp: toTimestamp(date($p), time($p))
 }); // map
 
 meetings.set(meeting.id, meeting);
+
+statusMessage(`
+Meeting ${isUpdateRequest()? "updated" : "created"}.`
+);
 sendMeetingData(meeting);
 } // saveMeeting
 
@@ -310,7 +344,12 @@ $("main").innerHTML = "";
 
 
 function generateMeetingId () {
-return btoa(Math.random());
+let id;
+do {
+id = btoa(Math.random());
+} while (meetings.has(id));
+
+return id;
 } // generateMeetingId
 
 function isUpdateRequest () {
@@ -346,6 +385,7 @@ loadMeetingData(data);
 } // integrateMeetingData
 
 function findProposal (list, date, time) {
+if (not(list) || not(list instanceof Array) || list.length === 0) return false;
 if (list[0].matches("tr")) return list.find(
 $tr => $(".date", $tr).textContent === date
 && $(".time", $tr).textContent === time
@@ -427,6 +467,8 @@ body: JSON.stringify({clientID: clientID, meeting})
 
 const responseData = await res.json();
 //console.log("response data: ", responseData);
+if (not(responseData)) statusMessage("invalid response from server!");
+else if (not(responseData.status)) statusMessage(`error: ${responseData.error}`);
 
 } catch (e) {
 statusMessage(`fetch failed.\n${e.message}`);
