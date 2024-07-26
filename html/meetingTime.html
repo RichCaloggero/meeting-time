@@ -4,10 +4,15 @@
 <meta charset="UTF-8" />
 <title>Meeting Time</title>
 <link rel="shortcut icon" href="#" type="image/x-icon">
+<style>
+nav ul {list-style-type: none;}
+</style>
 </head>
 <body>
 
 <nav><ul><li>
+<button data-action="display-instructions" accesskey="h">Instructions</button>
+</li><li>
 <button data-action="new-meeting" accesskey="n">New meeting</button>
 </li>
 <!--<li><button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
@@ -28,6 +33,8 @@ const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
 const actions = {
+back: back,
+"display-instructions": displayInstructions,
 "new-meeting": newMeeting,
 "update-meeting": updateMeeting,
 "delete-meeting": deleteMeeting,
@@ -50,6 +57,7 @@ proposals: [
 ]});
 
 const instructions = `
+<div class="instructions">
 <h1 id="meetingtime">MeetingTime</h1>
 <p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
 <h2 id="operation">Operation</h2>
@@ -70,6 +78,7 @@ const instructions = `
 </ul>
 <h2 id="concurrent-updates">Concurrent updates</h2>
 <p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
+</div>
 `;
 
 const meetingTemplate = `
@@ -114,7 +123,9 @@ clientID = data.id;
 loadAllMeetings(data.meetings, meetings);
 document.addEventListener("click", performAction);
 statusMessage("connected.");
+
 if (isUpdateRequest()) updateMeeting();
+else performAction("display-instructions");
 }); // connected
 
 server.addEventListener("update", e => {
@@ -135,34 +146,54 @@ map.set(meeting.id, meeting);
 
 
 function performAction (e) {
-const $action = e.submitter || e.target;
+const $action = typeof(e) === "string"?
+$(`[data-action='${e}']`)
+: (e.submitter || e.target);
+
 const actionId = $action.dataset.action;
 const $form = $action.closest("form");
 
-if ($action.hasAttribute("aria-pressed")) {
-if ($action.getAttribute("aria-pressed") === "true") return;
-resetNavigation();
-$action.setAttribute("aria-pressed", "true");
-} // if
+if ($action.hasAttribute("aria-current")) return;
 
 const action = actions[actionId];
 //console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
 action({$action, $form, update: getUpdateRequest()});
+
+resetNavigation();
+statusMessage($action.dataset.responseMessage);
 } // performAction
 
 
 /// actions
 
+function displayInstructions () {
+if ($("form")) {
+$("h1").hidden = true;
+$("form").hidden = true;
+} // if
+
+$("main").insertAdjacentHTML("afterBegin", instructions);
+if ($("form")) $(".instructions").insertAdjacentHTML("beforeEnd", `<button data-action="back" accesskey="x">Back</button>`);
+} // instructions
+
+
+function back () {
+$(".instructions").remove();
+$$("main [hidden]").forEach(x => x.hidden = false);
+$("form .meeting-info").focus();
+} // back
+
+
 function newMeeting () {
 clearForm();
 meetingId = generateMeetingId();
-console.log("new id is ", meetingId);
+//console.log("new id: ", meetingId);
 
 $("main").insertAdjacentHTML("afterBegin",
 `<h1>New Meeting</h1>
-<form id="new-meeting">
+<form class="new-meeting">
 ${meetingTemplate}
 <button data-action="save-meeting-data" data-response="Meeting created" type="button">Submit</button>
 `);
@@ -339,8 +370,10 @@ return n1 < n2? 1 // largest first
 } // loadMeetingData
 
 function resetNavigation () {
-document.querySelectorAll("nav [aria-pressed]")
-.forEach(x => x.setAttribute("aria-pressed", "false"));
+$$("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+
+if ($(".instructions") && not($(".instructions").hidden)) $("nav [data-action='display-instructions']").setAttribute("aria-current", "page");
+else if ($("form.new-meeting") && not($("form.new-meeting").hidden)) $("nav [data-action='new-meeting']").setAttribute("aria-current", "page");
 } // resetNavigation
 
 
