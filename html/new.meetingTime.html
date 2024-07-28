@@ -2,29 +2,170 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>jQueryish</title>
+<title>New Meeting Time</title>
 <link rel="shortcut icon" href="#" type="image/x-icon">
 <style>
 nav ul {list-style-type: none;}
 </style>
 </head>
 <body>
+
+<nav><ul><li>
+<button data-action="display-instructions" accesskey="h">Instructions</button>
+</li><li>
+<button data-action="new-meeting" accesskey="n">New meeting</button>
+</li></ul>
+
 <main>
 </main>
-<output></output>
+
+<output id="status"></output>
 
 <script>
-const meeting = {
-id: "",
-info: "",
-proposals: [],
-}; // meeting
+const origin = "";
+const $nav = $("nav");
+const $main = $("main");
+const $status = $("#status");
+const actions = {
+"display-instructions": displayInstructions,
+"new-meeting": newMeeting,
+"update-meeting": updateMeeting,
+"save-meeting-data": saveMeetingData,
+"load-meeting-data": loadMeetingData,
+}; // actions
 
-document.querySelector("main").appendChild(
-initEvents(meeting, {
-"add-proposal": meeting.addProposal,
-vote: meeting.vote,
-}));
+const meetings = new Map();
+
+meetings.set("test0", {
+id: "test0",
+info: "some info",
+proposals: [
+{voteCount: 2, timestamp: toTimestamp("2024-07-10", "12:00:00")},
+{voteCount: 1, timestamp: toTimestamp("2024-07-10", "11:00:00")}
+]});
+
+const instructions = `
+<div class="instructions">
+<h1 id="meetingtime">MeetingTime</h1>
+<p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
+<h2 id="operation">Operation</h2>
+<ul>
+<li>Click "New meeting" to create an entry
+<ul>
+<li>the URL shown as the meeting ID must be copied and saved</li>
+<li>the creator is responsible for providing this URL to all other participants</li>
+<li>click "submit" to create the entry</li>
+</ul></li>
+<li>Updating
+<ul>
+<li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
+<li>proposals sort with highest vote count first</li>
+<li>Click "submit" to update the entry</li>
+</ul></li>
+<li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
+</ul>
+<h2 id="concurrent-updates">Concurrent updates</h2>
+<p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
+</div>
+`;
+
+/// connect to server
+
+let clientID = 0;
+const server = new EventSource(`${origin}/events`);
+
+server.addEventListener("open", e => {
+//console.log("connecting...");
+statusMessage("Connecting ...")
+});
+
+server.addEventListener("connected", e => {
+const data = JSON.parse(e.data);
+clientID = data.id;
+loadAllMeetings(data.meetings, meetings);
+document.addEventListener("click", performAction);
+statusMessage("connected.");
+
+if (isUpdateRequest()) updateMeeting();
+else performAction("display-instructions");
+}); // connected
+
+server.addEventListener("update", e => {
+data = JSON.parse(e.data);
+//console.log("update: ", data);
+meetings.set(data.meeting.id, data.meeting);
+if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge(data.meeting);
+}); // update
+
+server.onerror = e => statusMessage(`error from server:\n${e}`);
+
+function loadAllMeetings (list, map) {
+for (const meeting of list) {
+map.set(meeting.id, meeting);
+} // for
+} // loadAllMeetings
+
+
+/// actions
+
+function newMeeting () {
+clear();
+ui = new MeetingUI();
+document.querySelector("main")
+.appendChild(ui.ui())
+.querySelector("[data-name='meeting-info']").focus();
+
+return ui.ui();
+} // newMeeting
+
+function updateMeeting () {
+clear();
+const id = getUpdateRequest();
+if (not(id) || not(meetings.has(id))) {
+statusMessage(`invalid or missing meeting ID: "${id}"`);
+return false;
+} // if
+
+ui = new MeetingUI(meetings.get(id));
+document.querySelector("main")
+.appendChild(ui.ui())
+.querySelector("[data-name='meeting-info']").focus();
+
+return ui.ui();
+} // updateMeeting
+
+function displayInstructions () {
+clear();
+document.querySelector("main").insertAdjacentHTML("afterBegin", instructions);
+} // displayInstructions
+
+function saveMeetingData () {
+
+} // saveMeetingData
+
+function loadMeetingData () {
+
+} // loadMeetingData
+
+function performAction (e) {
+const $action = typeof(e) === "string"?
+$(`[data-action='${e}']`)
+: (e.submitter || e.target);
+
+const actionId = $action.dataset.action;
+if ($action.hasAttribute("aria-current")) return;
+
+const action = actions[actionId];
+//console.log("action: ", actionId, action);
+if (not(action)) return; // fail silently
+
+action({$action, actionId, type: $action.dataset.type, update: getUpdateRequest()});
+
+resetNavigation();
+statusMessage($action.dataset.responseMessage);
+} // performAction
+
+
 
 
 function $ (s, c = document) {
@@ -50,9 +191,46 @@ node.value = _value : node.textContent = _value;
 
 function not (x) {return !x;}
 
-/// classes
 
-var Meeting = class {
+/// send data to server
+
+async function sendMeetingData (meeting) {
+//console.log("sendMeetingData(): ", clientID, meeting);
+if (clientID === 0) {
+statusMessage("Connection to server not established.");
+return;
+} // if
+
+try {
+const res = await fetch(`${origin}/data`, {
+method: "POST", 
+//mode: "cors",
+headers: {
+'Accept': 'application/json',
+'Content-Type': 'application/json',
+"Cache-Control": "no-cache"
+},
+//"origin-when-cross-origin": true,
+body: JSON.stringify({clientID: clientID, meeting})
+}); // fetch
+
+
+//console.log("fetch succeeded");
+
+const responseData = await res.json();
+//console.log("response data: ", responseData);
+if (not(responseData)) statusMessage("invalid response from server!");
+else if (not(responseData.status)) statusMessage(`error: ${responseData.error}`);
+
+} catch (e) {
+statusMessage(`fetch failed.\n${e.message}`);
+} // try
+} // sendMeetingData
+
+
+/// UI
+
+var MeetingUI = class {
 #data = {
 id: "",
 info: "",
@@ -61,13 +239,55 @@ proposals: []
 #options = {
 type: "new"
 };
+#ui = null;
+#events = null;
 
 constructor (data, options = {}) {
 if (data && data instanceof Object) this.#data = data;
 this.#options.type === not(data)? "new" : "update"; // if we pass in no data, this is a new meeting
+this.#initEvents ({
+"add-proposal": this.#addProposal,
+vote: this.#vote
+});
 } // constructor
 
+#addProposal () {
+const $proposal = $("form .new-proposal");
+const date = $(".new-proposal #date").value;
+const time = $(".new-proposal #time").value;
+if (not(date) || not(time)) {
+statusMessage("invalid timeslot");
+return;
+} // if
 
+const timestamp = toTimestamp(date, time);
+if (not(Number.isInteger(timestamp))) {
+statusMessage("invalid date or time");
+return;
+} // if
+
+const $p =  findProposal($$("form .proposal"), date, time);
+if ($p) {
+statusMessage("timeslot already proposed.");
+return;
+} // if
+
+this.#data.proposals.push({
+timestamp, voteCount: 1,
+});
+this.#data.proposals = this.#data.proposals.sort(orderByVoteCount);
+} // addProposal
+
+#vote () {
+const $vote = e.target;
+const $proposal = $vote.closest(".proposal");
+const index = [...$proposal.parentElement.children].indexOf($proposal);
+this.#data.proposals[index].voteCount += ($vote.checked? 1 : -1);
+} // vote
+
+ui () {return this.#ui;}
+
+// render UI 
 toString () {
 return `
 <div class="meeting">
@@ -142,17 +362,15 @@ return `<tr data-index="${i}">
 </tr>
 `; // return
 } // displayProposal
-
-
 } // toString
 
-initEvents (events) {
+#initEvents (events) {
 (this.#ui = document.createElement("div")).innerHTML = this.toString();
 this.#events = events;
 
 this.#ui.addEventListener("click", this);
 this.#ui.addEventListener("change", this);
-return object.#ui;
+return this.#ui;
 } // initEvents
 
 handleEvent (e) {
@@ -162,11 +380,120 @@ const handleEvent = this.#events[name];
 let [type, handler] = handleEvent instanceof Array?
 handleEvent : ["click", handleEvent];
 if (e.type === type) {
-if (not(handler.call(this, e))) this.#ui.innerHTML = this.toString();
+if (not(handler.call(this, e))) this.#ui.innerHTML = this.toString(); // do not rerender if handler returns truthy
 } // if
 } // if
 } // handleEvent
 } // class Meeting
+
+/// utility functions
+
+function loadMeetingData (data) {
+$$get("meeting-info")[0].value = data.info;
+
+$proposals = $$get("proposals")[0];
+
+let proposalCount = 0;
+for (proposal of data.proposals.sort(orderByVoteCount)) {
+proposalCount += 1;
+$proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
+} // for
+
+function orderByVoteCount (p1, p2) {
+const n1 = p1.voteCount, n2 = p2.voteCount;
+return n1 < n2? 1 // largest first
+: n1 > n2? -1
+: 0;
+} // orderByVoteCount
+} // loadMeetingData
+
+function resetNavigation () {
+document.querySelectorAll("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+} // resetNavigation
+
+
+function clear () {
+$("main").innerHTML = "";
+} // clearForm
+
+
+function generateMeetingId () {
+let id;
+do {
+id = btoa(Math.random());
+} while (meetings.has(id));
+
+return id;
+} // generateMeetingId
+
+function isUpdateRequest () {
+const url = new URL(location);
+return url.searchParams.has("update");
+} // isUpdateRequest
+
+function isNewRequest () {
+const url = new URL(location);
+return url.searchParams.has("new");
+} // isUpdateRequest
+
+function isHomepage () {
+return not(isUpdateRequest() || isNewRequest());
+} // isHomepage
+
+function getUpdateRequest () {
+return isUpdateRequest()?
+new URL(location).searchParams.get("update") : "";
+} // getUpdateRequest
+
+function isUpdateMode () {
+return $("form#update-meeting");
+} // isUpdateMode
+
+function merge (data) {
+statusMessage("someone else updated this meeting - reloading (changes may be lost)");
+$$get("proposals")[0].innerHTML = "";
+loadMeetingData(data);
+} // merge
+
+function integrateMeetingData (data) {
+$("form")["meeting-info"].value = data.info;
+
+for (proposal of data.proposals) {
+const $proposal =  findProposal($$("form .proposal"), data.date, data.time);
+if ($proposal && $("input", $proposal).checked) proposal.voteCount += 1;
+} // for
+$("form .proposals").innerHTML = "";
+
+loadMeetingData(data);
+} // integrateMeetingData
+
+function findProposal (list, date, time) {
+if (not(list) || not(list instanceof Array) || list.length === 0) return false;
+if (list[0].matches("tr")) return list.find(
+$tr => $(".date", $tr).textContent === date
+&& $(".time", $tr).textContent === time
+);
+else return list.find(
+p => p.date === date && p.time === time
+);
+} // findProposal
+
+function statusMessage (text) {
+if (text) setTimeout(() => $("#status").textContent = text, 200);
+} // statusMessage
+
+function generateURL (id) {
+const url = location.toString();
+return id? `${url.split("?")[0]}?update=${id}` : url.split("?")[0];
+} // generateURL
+
+function toTimestamp (date, time) {
+return Date.parse(`${date} ${time}`);
+} // toTimestamp
+
+function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
+function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
+
 </script>
 
 
