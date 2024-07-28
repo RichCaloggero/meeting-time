@@ -1,0 +1,174 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>jQueryish</title>
+<link rel="shortcut icon" href="#" type="image/x-icon">
+<style>
+nav ul {list-style-type: none;}
+</style>
+</head>
+<body>
+<main>
+</main>
+<output></output>
+
+<script>
+const meeting = {
+id: "",
+info: "",
+proposals: [],
+}; // meeting
+
+document.querySelector("main").appendChild(
+initEvents(meeting, {
+"add-proposal": meeting.addProposal,
+vote: meeting.vote,
+}));
+
+
+function $ (s, c = document) {
+const hasValue = "input, select, textarea, output";
+const nodeList = c.querySelectorAll(`[data-name='${s}'], ${s}`)
+//console.log("nodeList: ", nodeList);
+
+return {
+get value () {
+return nodeList.length > 0? nodeList.map(node => node.value) : undefined;
+}, // get value
+
+set: function set (value) {
+nodeList.forEach((node, index) => {
+const _value = value instanceof Array? value[index] : value;
+node.matches(hasValue)?
+node.value = _value : node.textContent = _value;
+}); // forEach
+} // set
+
+}; // return
+} // $
+
+function not (x) {return !x;}
+
+/// classes
+
+var Meeting = class {
+#data = {
+id: "",
+info: "",
+proposals: []
+};
+#options = {
+type: "new"
+};
+
+constructor (data, options = {}) {
+if (data && data instanceof Object) this.#data = data;
+this.#options.type === not(data)? "new" : "update"; // if we pass in no data, this is a new meeting
+} // constructor
+
+
+toString () {
+return `
+<div class="meeting">
+<h1>${this.#options.type} meeting</h1>
+
+<form>
+<div><label>Meeting info:<br>
+<textarea required data-name="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
+</div>
+
+<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
+<label>Date: <input data-name="date" type="date"></label>
+<br><label>Time: <input data-name="time" type="time"></label>
+<br><button data-action="add-proposal" type="button">Add proposal</button>
+</fieldset>
+
+<h3>Proposed Timeslots</h3>
+<table class="proposals"><thead>
+<tr><th>vote</th>
+<th>count</th>
+<th>date</th>
+<th>time</th>
+</tr></thead>
+<tbody>
+${this.#data.proposals.map(createProposal)}
+</tbody></table>
+
+<div>
+<label>Meeting ID: <input class="meeting-id" data-name="meeting-id" readonly></label>
+<span id="id-description">copy to clipboard and eMail to other participants</span>
+</div>
+
+
+<div><button data-action="${this.#options.type}-meeting">${this.#options.type}</button></div>
+</form></div>
+`; // meetingTemplate
+
+function createProposal (proposal, count) {
+count += 1; // index to count
+const {timestamp, voteCount} = proposal;
+const d = new Date(timestamp);
+const date = d.toLocaleDateString();
+const time = d.toLocaleTimeString();
+
+const dateLabel = `date-${count}`;
+const timeLabel = `time-${count}`;
+
+return `<tr class="proposal">
+<!--<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
+-->
+
+<td><input type="checkbox" data-action="vote"
+aria-label="${createLabel(voteCount, date, time)}">
+</td>
+
+<td><output data-name="vote-count">${voteCount}</output></td>
+<td class="date" id="${dateLabel}">${date}</td>
+<td class="time" id="${timeLabel}">${time}</td>
+</tr>`; // proposal
+
+function createLabel (voteCount, date, time) {
+return `currently ${voteCount} votes for ${time}, on ${date}`;
+} // createLabel
+} // createProposal
+
+function displayProposal (p, i) {
+return `<tr data-index="${i}">
+<td><label>Cast vote <input type="checkbox" data-name="vote"></label></td>
+<td data-name="vote-count">${p.voteCount}</td>
+<td>${p.time}</td>
+<td>${p.date}</td>
+</tr>
+`; // return
+} // displayProposal
+
+
+} // toString
+
+initEvents (events) {
+(this.#ui = document.createElement("div")).innerHTML = this.toString();
+this.#events = events;
+
+this.#ui.addEventListener("click", this);
+this.#ui.addEventListener("change", this);
+return object.#ui;
+} // initEvents
+
+handleEvent (e) {
+const name = e.target.dataset.name || e.target.dataset.action;
+if (name in this.#events) {
+const handleEvent = this.#events[name];
+let [type, handler] = handleEvent instanceof Array?
+handleEvent : ["click", handleEvent];
+if (e.type === type) {
+if (not(handler.call(this, e))) this.#ui.innerHTML = this.toString();
+} // if
+} // if
+} // handleEvent
+} // class Meeting
+</script>
+
+
+</body>
+</html>

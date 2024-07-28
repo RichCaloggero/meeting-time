@@ -4,10 +4,15 @@
 <meta charset="UTF-8" />
 <title>Meeting Time</title>
 <link rel="shortcut icon" href="#" type="image/x-icon">
+<style>
+nav ul {list-style-type: none;}
+</style>
 </head>
 <body>
 
 <nav><ul><li>
+<button data-action="display-instructions" accesskey="h">Instructions</button>
+</li><li>
 <button data-action="new-meeting" accesskey="n">New meeting</button>
 </li>
 <!--<li><button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
@@ -18,26 +23,6 @@
 </ul>
 
 <main>
-<h1 id="meetingtime">MeetingTime</h1>
-<p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
-<h2 id="operation">Operation</h2>
-<ul>
-<li>Click "New meeting" to create an entry
-<ul>
-<li>the URL shown as the meeting ID must be copied and saved</li>
-<li>the creator is responsible for providing this URL to all other participants</li>
-<li>click "submit" to create the entry</li>
-</ul></li>
-<li>Updating
-<ul>
-<li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
-<li>proposals sort with highest vote count first</li>
-<li>Click "submit" to update the entry</li>
-</ul></li>
-<li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
-</ul>
-<h2 id="concurrent-updates">Concurrent updates</h2>
-<p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
 </main>
 
 <output id="status"></output>
@@ -48,6 +33,8 @@ const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
 const actions = {
+back: back,
+"display-instructions": displayInstructions,
 "new-meeting": newMeeting,
 "update-meeting": updateMeeting,
 "delete-meeting": deleteMeeting,
@@ -69,15 +56,42 @@ proposals: [
 {voteCount: 1, timestamp: toTimestamp("2024-07-10", "11:00:00")}
 ]});
 
-
-const meetingTemplate = `<div>
-<label>Meeting ID: <input class="meeting-id" name="meeting-id" readonly></label>
-<span hidden id="id-description">copy to clipboard and eMail to other participants</span>
+const instructions = `
+<div class="instructions">
+<h1 id="meetingtime">MeetingTime</h1>
+<p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
+<h2 id="operation">Operation</h2>
+<ul>
+<li>Click "New meeting" to create an entry
+<ul>
+<li>the URL shown as the meeting ID must be copied and saved</li>
+<li>the creator is responsible for providing this URL to all other participants</li>
+<li>click "submit" to create the entry</li>
+</ul></li>
+<li>Updating
+<ul>
+<li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
+<li>proposals sort with highest vote count first</li>
+<li>Click "submit" to update the entry</li>
+</ul></li>
+<li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
+</ul>
+<h2 id="concurrent-updates">Concurrent updates</h2>
+<p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
 </div>
+`;
+
+const meetingTemplate = `
 
 <div><label>Meeting info:<br>
 <textarea required class="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
 </div>
+
+<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
+<label>Date: <input id="date" name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input id="time" name="time" type="time" id="proposal-time"></label>
+<br><button data-action="add-proposal" type="button">Add proposal</button>
+</fieldset>
 
 <h3>Current proposals</h3>
 <table class="proposals"><tr>
@@ -87,11 +101,10 @@ const meetingTemplate = `<div>
 <th>time</th>
 </tr></table>
 
-<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input id="date" name="date" type="date" id="proposal-date"></label>
-<br><label>Time: <input id="time" name="time" type="time" id="proposal-time"></label>
-<br><button data-action="add-proposal" type="button">Add proposal</button>
-</fieldset>
+<div>
+<label>Meeting ID: <input class="meeting-id" name="meeting-id" readonly></label>
+<span hidden id="id-description">copy to clipboard and eMail to other participants</span>
+</div>
 `; // meetingTemplate
 
 /// connect to server
@@ -110,7 +123,9 @@ clientID = data.id;
 loadAllMeetings(data.meetings, meetings);
 document.addEventListener("click", performAction);
 statusMessage("connected.");
+
 if (isUpdateRequest()) updateMeeting();
+else performAction("display-instructions");
 }); // connected
 
 server.addEventListener("update", e => {
@@ -131,34 +146,56 @@ map.set(meeting.id, meeting);
 
 
 function performAction (e) {
-const $action = e.submitter || e.target;
+const $action = typeof(e) === "string"?
+$(`[data-action='${e}']`)
+: (e.submitter || e.target);
+
 const actionId = $action.dataset.action;
 const $form = $action.closest("form");
 
-if ($action.hasAttribute("aria-pressed")) {
-if ($action.getAttribute("aria-pressed") === "true") return;
-resetNavigation();
-$action.setAttribute("aria-pressed", "true");
-} // if
+if ($action.hasAttribute("aria-current")) return;
 
 const action = actions[actionId];
 //console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
 action({$action, $form, update: getUpdateRequest()});
+
+resetNavigation();
+statusMessage($action.dataset.responseMessage);
 } // performAction
 
 
 /// actions
 
+function displayInstructions () {
+if ($("form")) {
+$("h1").hidden = true;
+$("form").hidden = true;
+} // if
+
+$("main").insertAdjacentHTML("afterBegin", instructions);
+if ($("form")) $(".instructions").insertAdjacentHTML("beforeEnd", `<button data-action="back" accesskey="x">Back</button>`);
+} // instructions
+
+
+function back () {
+$(".instructions").remove();
+$$("main [hidden]").forEach(x => x.hidden = false);
+$("form .meeting-info").focus();
+} // back
+
+
 function newMeeting () {
 clearForm();
 meetingId = generateMeetingId();
+//console.log("new id: ", meetingId);
 
 $("main").insertAdjacentHTML("afterBegin",
-`<form id="new-meeting" method="post">
+`<h1>New Meeting</h1>
+<form class="new-meeting">
 ${meetingTemplate}
-<button data-action="save-meeting-data" type="button">Submit</button>
+<button data-action="save-meeting-data" data-response="Meeting created" type="button">Submit</button>
 `);
 
 $(".meeting-id").setAttribute("aria-describedby", "id-description");
@@ -166,7 +203,7 @@ $("#id-description").hidden = false;
 $(".meeting-id").dataset.value = meetingId;
 $(".meeting-id").value = generateURL(meetingId);
 $(".meeting-id").select();
-$(".meeting-id").focus();
+$(".meeting-info").focus();
 } // newMeeting
 
 
@@ -174,16 +211,21 @@ function updateMeeting () {
 clearForm();
 
 $("main").insertAdjacentHTML("afterBegin", 
-`<form id="update-meeting">
+`<h1>Update meeting</h1>
+<form id="update-meeting">
 ${meetingTemplate}
 
-<button data-action="save-meeting-data" type="button">Submit</button>
+<button data-action="save-meeting-data" data-response="Meeting updated" type="button">Submit</button>
 </form>
 `);
 
 if (isUpdateRequest()) {
-$("form")["meeting-id"].value = getUpdateRequest();
-if (not(findMeeting())) return;
+$(".meeting-id").dataset.value = getUpdateRequest();
+$(".meeting-id").hidden = true;
+if (not(findMeeting())) {
+statusMessage("meeting not found.");
+return;
+} // if
 
 } else {
 $("form [name=meeting-id").removeAttribute("readonly");
@@ -270,7 +312,7 @@ const meeting = {};
 
 meeting.id = $(".meeting-id").dataset.value;
 meeting.info = valueOf("meeting-info")[0];
-meeting.proposals = $$get("proposal")
+meeting.proposals = $$(".proposal")
 .map($p => {
 return {
 voteCount: voteCount($p),
@@ -280,22 +322,17 @@ timestamp: toTimestamp(date($p), time($p))
 
 meetings.set(meeting.id, meeting);
 
-statusMessage(`
-Meeting ${isUpdateRequest()? "updated" : "created"}.`
-);
 sendMeetingData(meeting);
 } // saveMeeting
 
 function findMeeting () {
-$meetingId = $("form")["meeting-id"];
+const meetingId = $(".meeting-id").dataset.value;
 
-if (not(meetings.has($meetingId.value))) {
-statusMessage("invalid meeting ID");
-$meetingId.focus();
+if (not(meetings.has(meetingId))) {
 return false;
 } // if
 
-loadMeetingData(meetings.get($meetingId.value));
+loadMeetingData(meetings.get(meetingId));
 $("form")["meeting-info"].focus();
 return true;
 } // findMeeting
@@ -333,8 +370,10 @@ return n1 < n2? 1 // largest first
 } // loadMeetingData
 
 function resetNavigation () {
-document.querySelectorAll("nav [aria-pressed]")
-.forEach(x => x.setAttribute("aria-pressed", "false"));
+$$("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+
+if ($(".instructions") && not($(".instructions").hidden)) $("nav [data-action='display-instructions']").setAttribute("aria-current", "page");
+else if ($("form.new-meeting") && not($("form.new-meeting").hidden)) $("nav [data-action='new-meeting']").setAttribute("aria-current", "page");
 } // resetNavigation
 
 
@@ -396,7 +435,7 @@ p => p.date === date && p.time === time
 } // findProposal
 
 function statusMessage (text) {
-setTimeout(() => $("#status").textContent = text, 200);
+if (text) setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
 
 function generateURL (id) {

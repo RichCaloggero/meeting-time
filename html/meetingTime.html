@@ -435,7 +435,7 @@ p => p.date === date && p.time === time
 } // findProposal
 
 function statusMessage (text) {
-setTimeout(() => $("#status").textContent = text, 200);
+if (text) setTimeout(() => $("#status").textContent = text, 200);
 } // statusMessage
 
 function generateURL (id) {
@@ -444,6 +444,15 @@ return `${url.split("?")[0]}?update=${id}`;
 } // generateURL
 
 /// accessors
+
+meetingInfo(value, ui) {
+const ui = $(".meeting-info");
+
+if (ui) return ui;
+if (value) return set(value, ui);
+return valueOf(ui);
+} // meetingInfo
+
 
 function $$get(selector) {
 const elements = $$(`form ${selector}`);
