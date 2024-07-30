@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>New Meeting Time</title>
+<title>Meeting Time</title>
 <link rel="shortcut icon" href="#" type="image/x-icon">
 <style>
 nav ul {list-style-type: none;}
@@ -14,7 +14,13 @@ nav ul {list-style-type: none;}
 <button data-action="display-instructions" accesskey="h">Instructions</button>
 </li><li>
 <button data-action="new-meeting" accesskey="n">New meeting</button>
-</li></ul>
+</li>
+<!--<li><button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
+</li>
+<li><button data-action="delete-meeting" accesskey="d">Delete meeting</button>
+</li>
+-->
+</ul>
 
 <main>
 </main>
@@ -27,11 +33,17 @@ const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
 const actions = {
+back: back,
 "display-instructions": displayInstructions,
 "new-meeting": newMeeting,
 "update-meeting": updateMeeting,
+"delete-meeting": deleteMeeting,
 "save-meeting-data": saveMeetingData,
 "load-meeting-data": loadMeetingData,
+"add-proposal": addProposal,
+"delete-proposal": deleteProposal,
+"find-meeting": findMeeting,
+"vote": vote,
 }; // actions
 
 const meetings = new Map();
@@ -69,6 +81,32 @@ const instructions = `
 </div>
 `;
 
+const meetingTemplate = `
+
+<div><label>Meeting info:<br>
+<textarea required class="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
+</div>
+
+<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
+<label>Date: <input id="date" name="date" type="date" id="proposal-date"></label>
+<br><label>Time: <input id="time" name="time" type="time" id="proposal-time"></label>
+<br><button data-action="add-proposal" type="button">Add proposal</button>
+</fieldset>
+
+<h3>Current proposals</h3>
+<table class="proposals"><tr>
+<th>vote</th>
+<th>count</th>
+<th>date</th>
+<th>time</th>
+</tr></table>
+
+<div>
+<label>Meeting ID: <input class="meeting-id" name="meeting-id" readonly></label>
+<span hidden id="id-description">copy to clipboard and eMail to other participants</span>
+</div>
+`; // meetingTemplate
+
 /// connect to server
 
 let clientID = 0;
@@ -99,6 +137,7 @@ if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge(d
 
 server.onerror = e => statusMessage(`error from server:\n${e}`);
 
+
 function loadAllMeetings (list, map) {
 for (const meeting of list) {
 map.set(meeting.id, meeting);
@@ -106,152 +145,103 @@ map.set(meeting.id, meeting);
 } // loadAllMeetings
 
 
-/// actions
-
-function newMeeting () {
-clear();
-ui = new MeetingUI();
-document.querySelector("main")
-.appendChild(ui.ui())
-.querySelector("[data-name='meeting-info']").focus();
-
-return ui.ui();
-} // newMeeting
-
-function updateMeeting () {
-clear();
-const id = getUpdateRequest();
-if (not(id) || not(meetings.has(id))) {
-statusMessage(`invalid or missing meeting ID: "${id}"`);
-return false;
-} // if
-
-ui = new MeetingUI(meetings.get(id));
-document.querySelector("main")
-.appendChild(ui.ui())
-.querySelector("[data-name='meeting-info']").focus();
-
-return ui.ui();
-} // updateMeeting
-
-function displayInstructions () {
-clear();
-document.querySelector("main").insertAdjacentHTML("afterBegin", instructions);
-} // displayInstructions
-
-function saveMeetingData () {
-
-} // saveMeetingData
-
-function loadMeetingData () {
-
-} // loadMeetingData
-
 function performAction (e) {
 const $action = typeof(e) === "string"?
 $(`[data-action='${e}']`)
 : (e.submitter || e.target);
 
 const actionId = $action.dataset.action;
+const $form = $action.closest("form");
+
 if ($action.hasAttribute("aria-current")) return;
 
 const action = actions[actionId];
 //console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
-action({$action, actionId, type: $action.dataset.type, update: getUpdateRequest()});
+action({$action, $form, update: getUpdateRequest()});
 
 resetNavigation();
 statusMessage($action.dataset.responseMessage);
 } // performAction
 
 
+/// actions
+
+function displayInstructions () {
+if ($("form")) {
+$("h1").hidden = true;
+$("form").hidden = true;
+} // if
+
+$("main").insertAdjacentHTML("afterBegin", instructions);
+if ($("form")) $(".instructions").insertAdjacentHTML("beforeEnd", `<button data-action="back" accesskey="x">Back</button>`);
+} // instructions
 
 
-function $ (s, c = document) {
-const hasValue = "input, select, textarea, output";
-const nodeList = c.querySelectorAll(`[data-name='${s}'], ${s}`)
-//console.log("nodeList: ", nodeList);
-
-return {
-get value () {
-return nodeList.length > 0? nodeList.map(node => node.value) : undefined;
-}, // get value
-
-set: function set (value) {
-nodeList.forEach((node, index) => {
-const _value = value instanceof Array? value[index] : value;
-node.matches(hasValue)?
-node.value = _value : node.textContent = _value;
-}); // forEach
-} // set
-
-}; // return
-} // $
-
-function not (x) {return !x;}
+function back () {
+$(".instructions").remove();
+$$("main [hidden]").forEach(x => x.hidden = false);
+$("form .meeting-info").focus();
+} // back
 
 
-/// send data to server
+function newMeeting () {
+clearForm();
+meetingId = generateMeetingId();
+//console.log("new id: ", meetingId);
 
-async function sendMeetingData (meeting) {
-//console.log("sendMeetingData(): ", clientID, meeting);
-if (clientID === 0) {
-statusMessage("Connection to server not established.");
+$("main").insertAdjacentHTML("afterBegin",
+`<h1>New Meeting</h1>
+<form class="new-meeting">
+${meetingTemplate}
+<button data-action="save-meeting-data" data-response="Meeting created" type="button">Submit</button>
+`);
+
+$(".meeting-id").setAttribute("aria-describedby", "id-description");
+$("#id-description").hidden = false;
+$(".meeting-id").dataset.value = meetingId;
+$(".meeting-id").value = generateURL(meetingId);
+$(".meeting-id").select();
+$(".meeting-info").focus();
+} // newMeeting
+
+
+function updateMeeting () {
+clearForm();
+
+$("main").insertAdjacentHTML("afterBegin", 
+`<h1>Update meeting</h1>
+<form id="update-meeting">
+${meetingTemplate}
+
+<button data-action="save-meeting-data" data-response="Meeting updated" type="button">Submit</button>
+</form>
+`);
+
+if (isUpdateRequest()) {
+$(".meeting-id").dataset.value = getUpdateRequest();
+$(".meeting-id").hidden = true;
+if (not(findMeeting())) {
+statusMessage("meeting not found.");
 return;
 } // if
 
-try {
-const res = await fetch(`${origin}/data`, {
-method: "POST", 
-//mode: "cors",
-headers: {
-'Accept': 'application/json',
-'Content-Type': 'application/json',
-"Cache-Control": "no-cache"
-},
-//"origin-when-cross-origin": true,
-body: JSON.stringify({clientID: clientID, meeting})
-}); // fetch
+} else {
+$("form [name=meeting-id").removeAttribute("readonly");
+$("form [name=meeting-id").insertAdjacentHTML("afterEnd",
+`<button data-action="find-meeting" type="button">Find meeting</button>
+`);
+} // if
 
 
-//console.log("fetch succeeded");
+$("form")["meeting-info"].focus();
+} // updateMeeting
 
-const responseData = await res.json();
-//console.log("response data: ", responseData);
-if (not(responseData)) statusMessage("invalid response from server!");
-else if (not(responseData.status)) statusMessage(`error: ${responseData.error}`);
+function deleteMeeting () {
+} // deleteMeeting
 
-} catch (e) {
-statusMessage(`fetch failed.\n${e.message}`);
-} // try
-} // sendMeetingData
-
-
-/// UI
-
-var MeetingUI = class {
-#data = {
-id: "",
-info: "",
-proposals: []
-};
-#options = {
-type: "new"
-};
-#ui = null;
-#events = null;
-
-constructor (data, options = {}) {
-if (data && data instanceof Object) this.#data = data;
-this.#options.type === not(data)? "new" : "update"; // if we pass in no data, this is a new meeting
-this.#initEvents ({
-"add-proposal": this.#addProposal,
-vote: this.#vote
-});
-} // constructor
-
-#addProposal () {
+function addProposal () {
 const $proposal = $("form .new-proposal");
 const date = $(".new-proposal #date").value;
 const time = $(".new-proposal #time").value;
@@ -272,61 +262,17 @@ statusMessage("timeslot already proposed.");
 return;
 } // if
 
-this.#data.proposals.push({
+const proposal = {
 timestamp, voteCount: 1,
-});
-this.#data.proposals = this.#data.proposals.sort(orderByVoteCount);
+};
+
+const proposalCount = $$get("proposal").length;
+
+$("form .proposals").insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
+saveMeetingData();
 } // addProposal
 
-#vote () {
-const $vote = e.target;
-const $proposal = $vote.closest(".proposal");
-const index = [...$proposal.parentElement.children].indexOf($proposal);
-this.#data.proposals[index].voteCount += ($vote.checked? 1 : -1);
-} // vote
-
-ui () {return this.#ui;}
-
-// render UI 
-toString () {
-return `
-<div class="meeting">
-<h1>${this.#options.type} meeting</h1>
-
-<form>
-<div><label>Meeting info:<br>
-<textarea required data-name="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
-</div>
-
-<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input data-name="date" type="date"></label>
-<br><label>Time: <input data-name="time" type="time"></label>
-<br><button data-action="add-proposal" type="button">Add proposal</button>
-</fieldset>
-
-<h3>Proposed Timeslots</h3>
-<table class="proposals"><thead>
-<tr><th>vote</th>
-<th>count</th>
-<th>date</th>
-<th>time</th>
-</tr></thead>
-<tbody>
-${this.#data.proposals.map(createProposal)}
-</tbody></table>
-
-<div>
-<label>Meeting ID: <input class="meeting-id" data-name="meeting-id" readonly></label>
-<span id="id-description">copy to clipboard and eMail to other participants</span>
-</div>
-
-
-<div><button data-action="${this.#options.type}-meeting">${this.#options.type}</button></div>
-</form></div>
-`; // meetingTemplate
-
 function createProposal (proposal, count) {
-count += 1; // index to count
 const {timestamp, voteCount} = proposal;
 const d = new Date(timestamp);
 const date = d.toLocaleDateString();
@@ -338,55 +284,71 @@ const timeLabel = `time-${count}`;
 return `<tr class="proposal">
 <!--<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
 -->
-
 <td><input type="checkbox" data-action="vote"
 aria-label="${createLabel(voteCount, date, time)}">
 </td>
 
-<td><output data-name="vote-count">${voteCount}</output></td>
+<td><output class="vote-count">${proposal.voteCount}</output></td>
 <td class="date" id="${dateLabel}">${date}</td>
 <td class="time" id="${timeLabel}">${time}</td>
 </tr>`; // proposal
+} // createProposal
 
 function createLabel (voteCount, date, time) {
 return `currently ${voteCount} votes for ${time}, on ${date}`;
 } // createLabel
-} // createProposal
 
-function displayProposal (p, i) {
-return `<tr data-index="${i}">
-<td><label>Cast vote <input type="checkbox" data-name="vote"></label></td>
-<td data-name="vote-count">${p.voteCount}</td>
-<td>${p.time}</td>
-<td>${p.date}</td>
-</tr>
-`; // return
-} // displayProposal
-} // toString
+function deleteProposal ($button, $form) {
+$proposal = $button.closest(".proposal");
+if (not($proposal)) return;
+$proposal.remove();
+proposalCount -= 1;
+} // deleteProposal
 
-#initEvents (events) {
-(this.#ui = document.createElement("div")).innerHTML = this.toString();
-this.#events = events;
+function saveMeetingData (actionData) {
+const $proposals = $("form .proposals");
 
-this.#ui.addEventListener("click", this);
-this.#ui.addEventListener("change", this);
-return this.#ui;
-} // initEvents
+const meeting = {};
 
-handleEvent (e) {
-const name = e.target.dataset.name || e.target.dataset.action;
-if (name in this.#events) {
-const handleEvent = this.#events[name];
-let [type, handler] = handleEvent instanceof Array?
-handleEvent : ["click", handleEvent];
-if (e.type === type) {
-if (not(handler.call(this, e))) this.#ui.innerHTML = this.toString(); // do not rerender if handler returns truthy
+meeting.id = $(".meeting-id").dataset.value;
+meeting.info = valueOf("meeting-info")[0];
+meeting.proposals = $$(".proposal")
+.map($p => {
+return {
+voteCount: voteCount($p),
+timestamp: toTimestamp(date($p), time($p))
+};
+}); // map
+
+meetings.set(meeting.id, meeting);
+
+sendMeetingData(meeting);
+} // saveMeeting
+
+function findMeeting () {
+const meetingId = $(".meeting-id").dataset.value;
+
+if (not(meetings.has(meetingId))) {
+return false;
 } // if
-} // if
-} // handleEvent
-} // class Meeting
 
-/// utility functions
+loadMeetingData(meetings.get(meetingId));
+$("form")["meeting-info"].focus();
+return true;
+} // findMeeting
+
+function vote (data) {
+$action = data.$action; // the specific checkbox
+
+const $proposal = $action.closest(".proposal");
+$count = $(".vote-count", $proposal);
+$count.value = $action.checked?
+Number($count.value) + 1
+: Number($count.value) - 1;
+$action.setAttribute("aria-label", createLabel($count.value, date($proposal), time($proposal)));
+} // vote
+
+/// utilities
 
 function loadMeetingData (data) {
 $$get("meeting-info")[0].value = data.info;
@@ -408,11 +370,14 @@ return n1 < n2? 1 // largest first
 } // loadMeetingData
 
 function resetNavigation () {
-document.querySelectorAll("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+$$("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+
+if ($(".instructions") && not($(".instructions").hidden)) $("nav [data-action='display-instructions']").setAttribute("aria-current", "page");
+else if ($("form.new-meeting") && not($("form.new-meeting").hidden)) $("nav [data-action='new-meeting']").setAttribute("aria-current", "page");
 } // resetNavigation
 
 
-function clear () {
+function clearForm () {
 $("main").innerHTML = "";
 } // clearForm
 
@@ -430,15 +395,6 @@ function isUpdateRequest () {
 const url = new URL(location);
 return url.searchParams.has("update");
 } // isUpdateRequest
-
-function isNewRequest () {
-const url = new URL(location);
-return url.searchParams.has("new");
-} // isUpdateRequest
-
-function isHomepage () {
-return not(isUpdateRequest() || isNewRequest());
-} // isHomepage
 
 function getUpdateRequest () {
 return isUpdateRequest()?
@@ -484,8 +440,41 @@ if (text) setTimeout(() => $("#status").textContent = text, 200);
 
 function generateURL (id) {
 const url = location.toString();
-return id? `${url.split("?")[0]}?update=${id}` : url.split("?")[0];
+return `${url.split("?")[0]}?update=${id}`;
 } // generateURL
+
+/// accessors
+
+meetingInfo(value, ui) {
+const ui = $(".meeting-info");
+
+if (ui) return ui;
+if (value) return set(value, ui);
+return valueOf(ui);
+} // meetingInfo
+
+
+function $$get(selector) {
+const elements = $$(`form ${selector}`);
+return elements && elements.length > 0?
+elements : $$(`form .${selector}`);
+} // $$get
+
+function valueOf (selector) {
+return $$get(selector)
+.map(x => x.value || x.textContent);
+} // valueOf
+function date ($proposal) {
+return $proposal.matches("#new-proposal")?
+$("#date", $proposal).value : $(".date", $proposal).textContent;
+} // date
+
+function time ($proposal) {
+return $proposal.matches("#new-proposal")?
+$("#time", $proposal).value : $(".time", $proposal).textContent;
+} // date
+
+function voteCount ($proposal) {return Number($(".vote-count", $proposal).textContent);}
 
 function toTimestamp (date, time) {
 return Date.parse(`${date} ${time}`);
@@ -494,8 +483,48 @@ return Date.parse(`${date} ${time}`);
 function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
 function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
 
+function $ (s, c = document) {return c.querySelector(s);}
+function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
+
+function not (x) {return !x;}
+
+/// server stuff
+
+async function sendMeetingData (meeting) {
+//console.log("sendMeetingData(): ", clientID, meeting);
+if (clientID === 0) {
+statusMessage("Connection to server not established.");
+return;
+} // if
+
+try {
+const res = await fetch(`${origin}/data`, {
+method: "POST", 
+//mode: "cors",
+headers: {
+'Accept': 'application/json',
+'Content-Type': 'application/json',
+"Cache-Control": "no-cache"
+},
+//"origin-when-cross-origin": true,
+body: JSON.stringify({clientID: clientID, meeting})
+}); // fetch
+
+
+//console.log("fetch succeeded");
+
+const responseData = await res.json();
+//console.log("response data: ", responseData);
+if (not(responseData)) statusMessage("invalid response from server!");
+else if (not(responseData.status)) statusMessage(`error: ${responseData.error}`);
+
+} catch (e) {
+statusMessage(`fetch failed.\n${e.message}`);
+} // try
+} // sendMeetingData
+
+
+
 </script>
-
-
 </body>
 </html>
