@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Meeting Time</title>
+<title>New Meeting Time</title>
 <link rel="shortcut icon" href="#" type="image/x-icon">
 <style>
 nav ul {list-style-type: none;}
@@ -14,13 +14,9 @@ nav ul {list-style-type: none;}
 <button data-action="display-instructions" accesskey="h">Instructions</button>
 </li><li>
 <button data-action="new-meeting" accesskey="n">New meeting</button>
-</li>
-<!--<li><button data-action="update-meeting" aria-pressed="false" accesskey="u">Update meeting</button>
-</li>
-<li><button data-action="delete-meeting" accesskey="d">Delete meeting</button>
-</li>
--->
-</ul>
+</li><li>
+<button data-action="update-meeting" accesskey="u">Update meeting</button>
+</li></ul>
 
 <main>
 </main>
@@ -28,22 +24,14 @@ nav ul {list-style-type: none;}
 <output id="status"></output>
 
 <script>
-const origin = "/meetingTime";
+const origin = "";
 const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
 const actions = {
-back: back,
 "display-instructions": displayInstructions,
 "new-meeting": newMeeting,
 "update-meeting": updateMeeting,
-"delete-meeting": deleteMeeting,
-"save-meeting-data": saveMeetingData,
-"load-meeting-data": loadMeetingData,
-"add-proposal": addProposal,
-"delete-proposal": deleteProposal,
-"find-meeting": findMeeting,
-"vote": vote,
 }; // actions
 
 const meetings = new Map();
@@ -81,31 +69,7 @@ const instructions = `
 </div>
 `;
 
-const meetingTemplate = `
-
-<div><label>Meeting info:<br>
-<textarea required class="meeting-info" name="meeting-info" rows="5" cols="80"></textarea>
-</div>
-
-<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input id="date" name="date" type="date" id="proposal-date"></label>
-<br><label>Time: <input id="time" name="time" type="time" id="proposal-time"></label>
-<br><button data-action="add-proposal" type="button">Add proposal</button>
-</fieldset>
-
-<h3>Current proposals</h3>
-<table class="proposals"><tr>
-<th>vote</th>
-<th>count</th>
-<th>date</th>
-<th>time</th>
-</tr></table>
-
-<div>
-<label>Meeting ID: <input class="meeting-id" name="meeting-id" readonly></label>
-<span hidden id="id-description">copy to clipboard and eMail to other participants</span>
-</div>
-`; // meetingTemplate
+let ui = null;
 
 /// connect to server
 
@@ -132,11 +96,10 @@ server.addEventListener("update", e => {
 data = JSON.parse(e.data);
 //console.log("update: ", data);
 meetings.set(data.meeting.id, data.meeting);
-if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge(data.meeting);
+if (isUpdateRequest() && $ui("meeting-id") && $ui("meeting-id").dataset.value === data.meeting.id) merge(data.meeting, ui);
 }); // update
 
-server.onerror = e => statusMessage(`error from server:\n${e}`);
-
+server.onerror = e => statusMessage(`error from server:\n${e.error || e.message || e}`);
 
 function loadAllMeetings (list, map) {
 for (const meeting of list) {
@@ -145,341 +108,93 @@ map.set(meeting.id, meeting);
 } // loadAllMeetings
 
 
+/// actions
+
+function newMeeting () {
+clear();
+ui = new MeetingUI();
+
+document.querySelector("main")
+.appendChild(ui.ui())
+.querySelector("[data-name='meeting-info']").focus();
+
+$ui("update-meeting").hidden = true;
+$ui("new-meeting").setAttribute("aria-current", "page");
+
+return ui.ui();
+} // newMeeting
+
+function updateMeeting () {
+clear();
+const id = getUpdateRequest();
+if (not(id) || not(meetings.has(id))) {
+statusMessage(`invalid or missing meeting ID: "${id}"`);
+return false;
+} // if
+
+if (not(ui)) ui = new MeetingUI(meetings.get(id));
+document.querySelector("main")
+.appendChild(ui.ui());
+$ui("update-meeting").hidden = false;
+$ui("update-meeting").setAttribute("aria-current", "page");
+$ui("meeting-info").focus();
+} // updateMeeting
+
+function displayInstructions () {
+clear();
+document.querySelector("main").insertAdjacentHTML("afterBegin", instructions);
+$ui("display-instructions").setAttribute("aria-current", "page");
+} // displayInstructions
+
+
 function performAction (e) {
-const $action = typeof(e) === "string"?
-$(`[data-action='${e}']`)
+const $action = 
+typeof(e) === "string"?
+$ui(e)
 : (e.submitter || e.target);
 
 const actionId = $action.dataset.action;
-const $form = $action.closest("form");
-
 if ($action.hasAttribute("aria-current")) return;
 
 const action = actions[actionId];
 //console.log("action: ", actionId, action);
 if (not(action)) return; // fail silently
 
-action({$action, $form, update: getUpdateRequest()});
-
 resetNavigation();
-statusMessage($action.dataset.responseMessage);
+action({$action, actionId, type: $action.dataset.type, update: getUpdateRequest()});
+
 } // performAction
 
 
-/// actions
-
-function displayInstructions () {
-if ($("form")) {
-$("h1").hidden = true;
-$("form").hidden = true;
-} // if
-
-$("main").insertAdjacentHTML("afterBegin", instructions);
-if ($("form")) $(".instructions").insertAdjacentHTML("beforeEnd", `<button data-action="back" accesskey="x">Back</button>`);
-} // instructions
 
 
-function back () {
-$(".instructions").remove();
-$$("main [hidden]").forEach(x => x.hidden = false);
-$("form .meeting-info").focus();
-} // back
+function $ (s, c = document) {
+const hasValue = "input, select, textarea, output";
+const nodeList = [...(c.querySelectorAll(`${s}, [data-name='${s}']`) || [])];
+//console.log("nodeList: ", nodeList);
 
-
-function newMeeting () {
-clearForm();
-meetingId = generateMeetingId();
-//console.log("new id: ", meetingId);
-
-$("main").insertAdjacentHTML("afterBegin",
-`<h1>New Meeting</h1>
-<form class="new-meeting">
-${meetingTemplate}
-<button data-action="save-meeting-data" data-response="Meeting created" type="button">Submit</button>
-`);
-
-$(".meeting-id").setAttribute("aria-describedby", "id-description");
-$("#id-description").hidden = false;
-$(".meeting-id").dataset.value = meetingId;
-$(".meeting-id").value = generateURL(meetingId);
-$(".meeting-id").select();
-$(".meeting-info").focus();
-} // newMeeting
-
-
-function updateMeeting () {
-clearForm();
-
-$("main").insertAdjacentHTML("afterBegin", 
-`<h1>Update meeting</h1>
-<form id="update-meeting">
-${meetingTemplate}
-
-<button data-action="save-meeting-data" data-response="Meeting updated" type="button">Submit</button>
-</form>
-`);
-
-if (isUpdateRequest()) {
-$(".meeting-id").dataset.value = getUpdateRequest();
-$(".meeting-id").hidden = true;
-if (not(findMeeting())) {
-statusMessage("meeting not found.");
-return;
-} // if
-
-} else {
-$("form [name=meeting-id").removeAttribute("readonly");
-$("form [name=meeting-id").insertAdjacentHTML("afterEnd",
-`<button data-action="find-meeting" type="button">Find meeting</button>
-`);
-} // if
-
-
-$("form")["meeting-info"].focus();
-} // updateMeeting
-
-function deleteMeeting () {
-} // deleteMeeting
-
-function addProposal () {
-const $proposal = $("form .new-proposal");
-const date = $(".new-proposal #date").value;
-const time = $(".new-proposal #time").value;
-if (not(date) || not(time)) {
-statusMessage("invalid timeslot");
-return;
-} // if
-
-const timestamp = toTimestamp(date, time);
-if (not(Number.isInteger(timestamp))) {
-statusMessage("invalid date or time");
-return;
-} // if
-
-const $p =  findProposal($$("form .proposal"), date, time);
-if ($p) {
-statusMessage("timeslot already proposed.");
-return;
-} // if
-
-const proposal = {
-timestamp, voteCount: 1,
-};
-
-const proposalCount = $$get("proposal").length;
-
-$("form .proposals").insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount+1));
-saveMeetingData();
-} // addProposal
-
-function createProposal (proposal, count) {
-const {timestamp, voteCount} = proposal;
-const d = new Date(timestamp);
-const date = d.toLocaleDateString();
-const time = d.toLocaleTimeString();
-
-const dateLabel = `date-${count}`;
-const timeLabel = `time-${count}`;
-
-return `<tr class="proposal">
-<!--<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
--->
-<td><input type="checkbox" data-action="vote"
-aria-label="${createLabel(voteCount, date, time)}">
-</td>
-
-<td><output class="vote-count">${proposal.voteCount}</output></td>
-<td class="date" id="${dateLabel}">${date}</td>
-<td class="time" id="${timeLabel}">${time}</td>
-</tr>`; // proposal
-} // createProposal
-
-function createLabel (voteCount, date, time) {
-return `currently ${voteCount} votes for ${time}, on ${date}`;
-} // createLabel
-
-function deleteProposal ($button, $form) {
-$proposal = $button.closest(".proposal");
-if (not($proposal)) return;
-$proposal.remove();
-proposalCount -= 1;
-} // deleteProposal
-
-function saveMeetingData (actionData) {
-const $proposals = $("form .proposals");
-
-const meeting = {};
-
-meeting.id = $(".meeting-id").dataset.value;
-meeting.info = valueOf("meeting-info")[0];
-meeting.proposals = $$(".proposal")
-.map($p => {
 return {
-voteCount: voteCount($p),
-timestamp: toTimestamp(date($p), time($p))
-};
-}); // map
+ui: nodeList,
 
-meetings.set(meeting.id, meeting);
+get value () {
+return nodeList.length > 0? nodeList.map(node => valueOf(node)) : undefined;
+}, // get value
 
-sendMeetingData(meeting);
-} // saveMeeting
+set: function set (value) {
+nodeList.forEach((node, index) => {
+const _value = value instanceof Array? value[index] : value;
+node.matches(hasValue)?
+node.value = _value : node.textContent = _value;
+}); // forEach
+}, // set
+}; // return
 
-function findMeeting () {
-const meetingId = $(".meeting-id").dataset.value;
-
-if (not(meetings.has(meetingId))) {
-return false;
-} // if
-
-loadMeetingData(meetings.get(meetingId));
-$("form")["meeting-info"].focus();
-return true;
-} // findMeeting
-
-function vote (data) {
-$action = data.$action; // the specific checkbox
-
-const $proposal = $action.closest(".proposal");
-$count = $(".vote-count", $proposal);
-$count.value = $action.checked?
-Number($count.value) + 1
-: Number($count.value) - 1;
-$action.setAttribute("aria-label", createLabel($count.value, date($proposal), time($proposal)));
-} // vote
-
-/// utilities
-
-function loadMeetingData (data) {
-$$get("meeting-info")[0].value = data.info;
-
-$proposals = $$get("proposals")[0];
-
-let proposalCount = 0;
-for (proposal of data.proposals.sort(orderByVoteCount)) {
-proposalCount += 1;
-$proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
-} // for
-
-function orderByVoteCount (p1, p2) {
-const n1 = p1.voteCount, n2 = p2.voteCount;
-return n1 < n2? 1 // largest first
-: n1 > n2? -1
-: 0;
-} // orderByVoteCount
-} // loadMeetingData
-
-function resetNavigation () {
-$$("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
-
-if ($(".instructions") && not($(".instructions").hidden)) $("nav [data-action='display-instructions']").setAttribute("aria-current", "page");
-else if ($("form.new-meeting") && not($("form.new-meeting").hidden)) $("nav [data-action='new-meeting']").setAttribute("aria-current", "page");
-} // resetNavigation
-
-
-function clearForm () {
-$("main").innerHTML = "";
-} // clearForm
-
-
-function generateMeetingId () {
-let id;
-do {
-id = btoa(Math.random());
-} while (meetings.has(id));
-
-return id;
-} // generateMeetingId
-
-function isUpdateRequest () {
-const url = new URL(location);
-return url.searchParams.has("update");
-} // isUpdateRequest
-
-function getUpdateRequest () {
-return isUpdateRequest()?
-new URL(location).searchParams.get("update") : "";
-} // getUpdateRequest
-
-function isUpdateMode () {
-return $("form#update-meeting");
-} // isUpdateMode
-
-function merge (data) {
-statusMessage("someone else updated this meeting - reloading (changes may be lost)");
-$$get("proposals")[0].innerHTML = "";
-loadMeetingData(data);
-} // merge
-
-function integrateMeetingData (data) {
-$("form")["meeting-info"].value = data.info;
-
-for (proposal of data.proposals) {
-const $proposal =  findProposal($$("form .proposal"), data.date, data.time);
-if ($proposal && $("input", $proposal).checked) proposal.voteCount += 1;
-} // for
-$("form .proposals").innerHTML = "";
-
-loadMeetingData(data);
-} // integrateMeetingData
-
-function findProposal (list, date, time) {
-if (not(list) || not(list instanceof Array) || list.length === 0) return false;
-if (list[0].matches("tr")) return list.find(
-$tr => $(".date", $tr).textContent === date
-&& $(".time", $tr).textContent === time
-);
-else return list.find(
-p => p.date === date && p.time === time
-);
-} // findProposal
-
-function statusMessage (text) {
-if (text) setTimeout(() => $("#status").textContent = text, 200);
-} // statusMessage
-
-function generateURL (id) {
-const url = location.toString();
-return `${url.split("?")[0]}?update=${id}`;
-} // generateURL
-
-/// accessors
-
-function $$get(selector) {
-const elements = $$(`form ${selector}`);
-return elements && elements.length > 0?
-elements : $$(`form .${selector}`);
-} // $$get
-
-function valueOf (selector) {
-return $$get(selector)
-.map(x => x.value || x.textContent);
-} // valueOf
-function date ($proposal) {
-return $proposal.matches("#new-proposal")?
-$("#date", $proposal).value : $(".date", $proposal).textContent;
-} // date
-
-function time ($proposal) {
-return $proposal.matches("#new-proposal")?
-$("#time", $proposal).value : $(".time", $proposal).textContent;
-} // date
-
-function voteCount ($proposal) {return Number($(".vote-count", $proposal).textContent);}
-
-function toTimestamp (date, time) {
-return Date.parse(`${date} ${time}`);
-} // toTimestamp
-
-function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
-function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
-
-function $ (s, c = document) {return c.querySelector(s);}
-function $$ (s, c = document) {return [...c.querySelectorAll(s)];}
+} // $
 
 function not (x) {return !x;}
 
-/// server stuff
+
+/// send data to server
 
 async function sendMeetingData (meeting) {
 //console.log("sendMeetingData(): ", clientID, meeting);
@@ -506,16 +221,338 @@ body: JSON.stringify({clientID: clientID, meeting})
 
 const responseData = await res.json();
 //console.log("response data: ", responseData);
-if (not(responseData)) statusMessage("invalid response from server!");
-else if (not(responseData.status)) statusMessage(`error: ${responseData.error}`);
+if (responseData.status) statusMessage("Data saved.");
+else statusMessage(`error from server; ${responseData.error}!`);
 
 } catch (e) {
-statusMessage(`fetch failed.\n${e.message}`);
+statusMessage(`error communicating with server; ${e.message}`);
 } // try
 } // sendMeetingData
 
 
+/// UI
 
+var MeetingUI = class {
+#type = "new";
+
+#data = {
+id: "",
+info: "",
+proposals: []
+};
+#options = {
+};
+#ui = null;
+#events = null;
+
+constructor (data, options = {}) {
+if (data && data instanceof Object) {
+this.#data = data;
+this.#type = "update";
+} // if
+
+if (not(this.#data.id)) this.#data.id = generateMeetingId();
+
+this.#initEvents ({
+"meeting-info": ["change", this.#changeMeetingInfo],
+"add-proposal": this.#addProposal,
+vote: ["change", this.#vote],
+"save-meeting-data": this.#saveMeetingData,
+});
+} // constructor
+
+get id () {return this.#data.id;}
+
+#changeMeetingInfo (e) {
+this.#data.info = e.target.value;
+return true;
+} // #changeMeetingInfo 
+
+#saveMeetingData () {
+for (const p of this.#data.proposals) {
+delete p.alreadyVoted;
+delete p.id;
+} // for
+
+meetings.set(this.id, this.#data);
+sendMeetingData(this.#data);
+//console.log("saved...");
+return true; // do not rerender
+} // saveMeetingData
+
+
+#addProposal (e) {
+focus(".new-proposal input");
+const $proposal = this.#ui.querySelector(".new-proposal");
+$ui("date", $proposal).focus();
+
+const date = valueOf("date", $proposal);
+const time = valueOf("time", $proposal);
+
+if (not(date) || not(time)) {
+statusMessage("invalid timeslot");
+return;
+} // if
+
+const timestamp = toTimestamp(date, time);
+if (not(Number.isInteger(timestamp))) {
+statusMessage("invalid date or time");
+return;
+} // if
+
+const proposals = this.#data.proposals;
+if (proposals.find(p => p.timestamp === timestamp)) {
+statusMessage("timeslot already proposed.");
+return;
+} // if
+
+proposals.push({
+id: `pid-${proposals.length}`, alreadyVoted: true, voteCount: 1, timestamp
+});
+} // addProposal
+
+#vote (e) {
+const $vote = e.target;
+const $proposal = $vote.closest(".proposal");
+const index = [...$proposal.parentElement.children].indexOf($proposal);
+const p = this.#data.proposals[index];
+if (p.alreadyVoted) return;
+
+if ($vote.checked) p.voteCount += 1;
+else p.voteCount -= 1;
+$ui("vote-count", $proposal).value = p.voteCount;
+$vote.setAttribute("aria-label", createLabel(p.voteCount, toTime(p.timestamp), toDate(p.timestamp)));
+
+if (this.#type === "new") p.alreadyVoted = true;
+
+return true; // no rerender
+} // vote
+
+ui () {return this.#ui;}
+
+// render UI 
+toString () {
+const id = this.#data.id;
+
+return `
+<div class="meeting">
+<h1>${this.#type} meeting</h1>
+
+<form>
+<div><label>Meeting info:<br>
+<textarea required data-name="meeting-info" rows="5" cols="80">
+${this.#data.info}
+</textarea>
+</div>
+
+<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
+<label>Date: <input data-name="date" type="date"></label>
+<br><label>Time: <input data-name="time" type="time"></label>
+<br><button data-action="add-proposal" type="button">Add proposal</button>
+</fieldset>
+<hr>
+<h3>Proposed Timeslots</h3>
+<table class="proposals"><thead>
+<tr><th>vote</th>
+<th>count</th>
+<th>date</th>
+<th>time</th>
+</tr></thead>
+<tbody>
+${this.#data.proposals.sort(orderByVoteCount).map(createProposal)}
+</tbody></table>
+
+<div ${this.#type === "update"? "hidden" : ""}>
+<label>Meeting ID: <input data-name="meeting-id" readonly data-value="${id}" value="${generateUrl(id)}"></label>
+<span id="id-description">copy to clipboard and eMail to other participants</span>
+</div>
+
+
+<div><button type="button" data-action="save-meeting-data">${this.#type} meeting</button></div>
+</form></div>
+`; // meetingTemplate
+
+function createProposal (proposal, count) {
+count += 1; // index to count
+const {timestamp, voteCount, alreadyVoted} = proposal;
+const [date, time]  = [toDate(timestamp), toTime(timestamp)];
+
+const dateLabel = `date-${count}`;
+const timeLabel = `time-${count}`;
+
+return `<tr class="proposal">
+<!--<td><input type="checkbox" data-action="vote" aria-labelledby="${dateLabel} ${timeLabel}"></td>
+-->
+
+<td><input type="checkbox" ${alreadyVoted? "checked" : ""} data-action="vote" data-id="${proposal.id}"
+aria-label="${createLabel(voteCount, date, time)}">
+</td>
+
+<td><output data-name="vote-count">${voteCount}</output></td>
+<td class="date" id="${dateLabel}">${date}</td>
+<td class="time" id="${timeLabel}">${time}</td>
+</tr>`; // proposal
+
+} // createProposal
+} // toString
+
+
+#initEvents (events) {
+(this.#ui = document.createElement("div")).innerHTML = this.toString();
+this.#events = events;
+
+this.#ui.addEventListener("click", this);
+this.#ui.addEventListener("change", this);
+return this.#ui;
+} // initEvents
+
+handleEvent (e) {
+const name = e.target.dataset.name || e.target.dataset.action;
+if (name in this.#events) {
+const handleEvent = this.#events[name];
+let [type, handler] = handleEvent instanceof Array?
+handleEvent : ["click", handleEvent];
+if (e.type === type) {
+if (not(handler.call(this, e))) this.#render(); // do not rerender if handler returns truthy
+} // if
+} // if
+} // handleEvent
+
+reload (data) {
+if (data && data.id === this.id) {
+this.#data = data;
+this.#render();
+} // if
+} // reload
+
+#render () {
+this.#ui.innerHTML = this.toString(); 
+} // #render
+} // class MeetingUI
+
+/// utility functions
+
+function createLabel (voteCount, date, time) {
+return `currently ${voteCount} votes for ${time}, on ${date}`;
+} // createLabel
+
+let focusAttempts = 0;
+function focus (s, index) {
+const refocusInterval = 100; // milliseconds
+
+setTimeout(function _focus () {
+const element = index?
+document.querySelectorAll(s)[index]
+: document.querySelector(s);
+//console.log("focusing ", element);
+focusAttempts += 1;
+//if (focusAttempts % 40 === 1) console.log("checking focus: ", document.activeElement, element);
+if (element) element.focus();
+
+if (focusAttempts > 5 || document.activeElement === element) {
+//console.log("focus ok after ", focusAttempts, " attempts.");
+focusAttempts = 0;
+return;
+} // if
+
+setTimeout(_focus, refocusInterval);
+}, refocusInterval);
+} // refocus
+
+function orderByVoteCount (p1, p2) {
+const n1 = p1.voteCount, n2 = p2.voteCount;
+return n1 < n2? 1 // largest first
+: n1 > n2? -1
+: 0;
+} // orderByVoteCount
+
+function resetNavigation () {
+document.querySelectorAll("nav [aria-current]").forEach(x => x.removeAttribute("aria-current"));
+} // resetNavigation
+
+
+function clear () {
+$("main").innerHTML = "";
+} // clear
+
+
+function generateMeetingId () {
+let id;
+do {
+id = btoa(Math.random());
+} while (meetings.has(id));
+
+return id;
+} // generateMeetingId
+
+function isUpdateRequest () {
+const url = new URL(location);
+return url.searchParams.has("update");
+} // isUpdateRequest
+
+function isNewRequest () {
+const url = new URL(location);
+return url.searchParams.has("new");
+} // isNewRequest
+
+function isHomepage () {
+return not(isUpdateRequest()) || not(isNewRequest());
+} // isHomepage
+
+function getUpdateRequest () {
+return isUpdateRequest()?
+new URL(location).searchParams.get("update") : "";
+} // getUpdateRequest
+
+
+function merge (data, ui) {
+if (ui) {
+statusMessage("someone else updated this meeting - reloading (changes may be lost)");
+ui.reload(data);
+} // if
+} // merge
+
+function findProposal (list, date, time) {
+if (not(list) || not(list instanceof Array) || list.length === 0) return false;
+if (list[0].matches("tr")) return list.find(
+$tr => $(".date", $tr).textContent === date
+&& $(".time", $tr).textContent === time
+);
+else return list.find(
+p => p.date === date && p.time === time
+);
+} // findProposal
+
+function statusMessage (text) {
+if (text) setTimeout(() => document.querySelector("#status").textContent = text, 200);
+} // statusMessage
+
+function generateUrl (id) {
+const url = location.toString();
+return id? `${url.split("?")[0]}?update=${id}` : url.split("?")[0];
+} // generateUrl
+
+function toTimestamp (date, time) {
+return Date.parse(`${date} ${time}`);
+} // toTimestamp
+
+function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
+function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
+
+function $ui (id, context = document) {
+const _$ui = id instanceof Element? id : context.querySelector(`${id}, [data-name='${id}'], [data-action='${id}']`);
+return _$ui;
+} // $ui
+
+function valueOf (id, context) {
+const ui = $ui(id, context);
+if (not(ui)) return "";
+return ui.matches("input, textarea, select, output")? ui.value
+: ui.hasAttribute("data-value")? ui.dataset.value
+: ui.textContent;
+} // valueOf
 </script>
+
+
 </body>
 </html>

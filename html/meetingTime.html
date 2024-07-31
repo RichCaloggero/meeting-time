@@ -69,6 +69,8 @@ const instructions = `
 </div>
 `;
 
+let ui = null;
+
 /// connect to server
 
 let clientID = 0;
@@ -94,10 +96,10 @@ server.addEventListener("update", e => {
 data = JSON.parse(e.data);
 //console.log("update: ", data);
 meetings.set(data.meeting.id, data.meeting);
-if (isUpdateMode() && $("form")["meeting-id"].value === data.meeting.id) merge(data.meeting);
+if (isUpdateRequest() && $ui("meeting-id") && $ui("meeting-id").dataset.value === data.meeting.id) merge(data.meeting, ui);
 }); // update
 
-server.onerror = e => statusMessage(`error from server:\n${e}`);
+server.onerror = e => statusMessage(`error from server:\n${e.error || e.message || e}`);
 
 function loadAllMeetings (list, map) {
 for (const meeting of list) {
@@ -130,14 +132,12 @@ statusMessage(`invalid or missing meeting ID: "${id}"`);
 return false;
 } // if
 
-ui = new MeetingUI(meetings.get(id));
+if (not(ui)) ui = new MeetingUI(meetings.get(id));
 document.querySelector("main")
-.appendChild(ui.ui())
-.querySelector("[data-name='meeting-info']").focus();
-
+.appendChild(ui.ui());
 $ui("update-meeting").hidden = false;
 $ui("update-meeting").setAttribute("aria-current", "page");
-
+$ui("meeting-info").focus();
 } // updateMeeting
 
 function displayInstructions () {
@@ -145,7 +145,6 @@ clear();
 document.querySelector("main").insertAdjacentHTML("afterBegin", instructions);
 $ui("display-instructions").setAttribute("aria-current", "page");
 } // displayInstructions
-
 
 
 function performAction (e) {
@@ -164,7 +163,6 @@ if (not(action)) return; // fail silently
 resetNavigation();
 action({$action, actionId, type: $action.dataset.type, update: getUpdateRequest()});
 
-statusMessage($action.dataset.responseMessage);
 } // performAction
 
 
@@ -222,7 +220,7 @@ body: JSON.stringify({clientID: clientID, meeting})
 //console.log("fetch succeeded");
 
 const responseData = await res.json();
-console.log("response data: ", responseData);
+//console.log("response data: ", responseData);
 if (responseData.status) statusMessage("Data saved.");
 else statusMessage(`error from server; ${responseData.error}!`);
 
@@ -265,15 +263,6 @@ vote: ["change", this.#vote],
 
 get id () {return this.#data.id;}
 
-#refocus () {
-const index = this.#data.proposals.findIndex(p => p.focus);
-console.log("refocus index: ", index);
-if (index >= 0) {
-//focus(document.querySelectorAll(".proposals .proposal input")[index]);
-delete this.#data.proposals[index].focus;
-} // if
-} // #refocus
-
 #changeMeetingInfo (e) {
 this.#data.info = e.target.value;
 return true;
@@ -287,7 +276,7 @@ delete p.id;
 
 meetings.set(this.id, this.#data);
 sendMeetingData(this.#data);
-console.log("saved...");
+//console.log("saved...");
 return true; // do not rerender
 } // saveMeetingData
 
@@ -336,7 +325,6 @@ $vote.setAttribute("aria-label", createLabel(p.voteCount, toTime(p.timestamp), t
 
 if (this.#type === "new") p.alreadyVoted = true;
 
-focus(`.proposals [data-name='vote'][data-id='${p.id}']`);
 return true; // no rerender
 } // vote
 
@@ -362,7 +350,7 @@ ${this.#data.info}
 <br><label>Time: <input data-name="time" type="time"></label>
 <br><button data-action="add-proposal" type="button">Add proposal</button>
 </fieldset>
-
+<hr>
 <h3>Proposed Timeslots</h3>
 <table class="proposals"><thead>
 <tr><th>vote</th>
@@ -371,10 +359,10 @@ ${this.#data.info}
 <th>time</th>
 </tr></thead>
 <tbody>
-${this.#data.proposals.map(createProposal)}
+${this.#data.proposals.sort(orderByVoteCount).map(createProposal)}
 </tbody></table>
 
-<div>
+<div ${this.#type === "update"? "hidden" : ""}>
 <label>Meeting ID: <input data-name="meeting-id" readonly data-value="${id}" value="${generateUrl(id)}"></label>
 <span id="id-description">copy to clipboard and eMail to other participants</span>
 </div>
@@ -425,10 +413,21 @@ const handleEvent = this.#events[name];
 let [type, handler] = handleEvent instanceof Array?
 handleEvent : ["click", handleEvent];
 if (e.type === type) {
-if (not(handler.call(this, e))) this.#ui.innerHTML = this.toString(); // do not rerender if handler returns truthy
+if (not(handler.call(this, e))) this.#render(); // do not rerender if handler returns truthy
 } // if
 } // if
 } // handleEvent
+
+reload (data) {
+if (data && data.id === this.id) {
+this.#data = data;
+this.#render();
+} // if
+} // reload
+
+#render () {
+this.#ui.innerHTML = this.toString(); 
+} // #render
 } // class MeetingUI
 
 /// utility functions
@@ -445,13 +444,13 @@ setTimeout(function _focus () {
 const element = index?
 document.querySelectorAll(s)[index]
 : document.querySelector(s);
-console.log("focusing ", element);
+//console.log("focusing ", element);
 focusAttempts += 1;
-if (focusAttempts % 40 === 1) console.log("checking focus: ", document.activeElement, element);
+//if (focusAttempts % 40 === 1) console.log("checking focus: ", document.activeElement, element);
 if (element) element.focus();
 
-if (document.activeElement === element) {
-console.log("focus ok after ", focusAttempts, " attempts.");
+if (focusAttempts > 5 || document.activeElement === element) {
+//console.log("focus ok after ", focusAttempts, " attempts.");
 focusAttempts = 0;
 return;
 } // if
@@ -459,18 +458,6 @@ return;
 setTimeout(_focus, refocusInterval);
 }, refocusInterval);
 } // refocus
-
-function loadMeetingData (data) {
-$$get("meeting-info")[0].value = data.info;
-
-$proposals = $$get("proposals")[0];
-
-let proposalCount = 0;
-for (proposal of data.proposals.sort(orderByVoteCount)) {
-proposalCount += 1;
-$proposals.insertAdjacentHTML("beforeEnd", createProposal(proposal, proposalCount));
-} // for
-} // loadMeetingData
 
 function orderByVoteCount (p1, p2) {
 const n1 = p1.voteCount, n2 = p2.voteCount;
@@ -517,27 +504,13 @@ return isUpdateRequest()?
 new URL(location).searchParams.get("update") : "";
 } // getUpdateRequest
 
-function isUpdateMode () {
-return $("form#update-meeting");
-} // isUpdateMode
 
-function merge (data) {
+function merge (data, ui) {
+if (ui) {
 statusMessage("someone else updated this meeting - reloading (changes may be lost)");
-$$get("proposals")[0].innerHTML = "";
-loadMeetingData(data);
+ui.reload(data);
+} // if
 } // merge
-
-function integrateMeetingData (data) {
-$("form")["meeting-info"].value = data.info;
-
-for (proposal of data.proposals) {
-const $proposal =  findProposal($$("form .proposal"), data.date, data.time);
-if ($proposal && $("input", $proposal).checked) proposal.voteCount += 1;
-} // for
-$("form .proposals").innerHTML = "";
-
-loadMeetingData(data);
-} // integrateMeetingData
 
 function findProposal (list, date, time) {
 if (not(list) || not(list instanceof Array) || list.length === 0) return false;

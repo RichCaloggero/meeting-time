@@ -1,1 +1,1 @@
-[{"id":"MC4zMDczMDIwMTUwOTkxOTY2Mw==","info":"foo","proposals":[{"voteCount":1,"timestamp":1722373200000},{"voteCount":3,"timestamp":1722366000000}],"timestamp":1722371204344}]
+[{"id":"MC4zMDczMDIwMTUwOTkxOTY2Mw==","info":"concurrency test\n","proposals":[{"voteCount":6,"timestamp":1722366000000},{"voteCount":5,"timestamp":1722373200000}],"timestamp":1722371204344}]
