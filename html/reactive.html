@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Reactive test</title>
+</head>
+<body>
+<main></main>
+<output></output>
+
+<script>
+const data = {log: []};
+for (i=0; i<999; i++) data.log[i] = random(0, 2000);
+
+
+
+
+var Reactive = class {
+#data = {log: []};
+#ui = null;
+#events = {};
+#focus = null;
+
+constructor (data) {
+if (data && data instanceof Object) this.#data = data;
+this.#init ({
+"add-entry": this.#addEntry,
+"add-focus": this.#addFocus,
+});
+this.render();
+} // constructor
+
+ui () {return this.#ui;}
+
+#addEntry () {
+this.#data.log.push(random(0,999));
+} // #addEntry
+
+#addFocus (e) {
+const path = ancestors(e.target, this.#ui).reverse();
+for (let i=0; i<path.length-1; i++) {
+const node1 = path[i], node2 = path[i+1];
+path[i] = {node: node1, index: [...node1.children].indexOf(node2)};
+} // for
+this.#focus = path;
+} // #addFocus
+
+toString () {
+return `<div>
+<button type="button" data-name="add-entry">Add entry</button></div>
+<ul data-name="add-focus">
+${this.#data.log.sort().map((x,i) => `<li><button type="button">${i}</button>: ${x}</li>`).join("\n")}
+</ul>
+</div>`;
+} // toString
+
+#init (events) {
+this.#ui = document.createElement("div");
+this.#events = events;
+this.#ui.addEventListener("click", this);
+} // #init
+
+handleEvent (e) {
+const path = ancestors(e.target, this.#ui);
+for (const node of path) {
+if (node.dataset.name in this.#events) {
+if (not(this.#events[node.dataset.name].call(this, e))) this.render();
+return;
+} // if
+} // for
+} // handleEvents
+
+render (data) {
+if (data && data instanceof Object) this.#data = data;
+this.#ui.innerHTML = this.toString();
+
+if (this.#focus) {
+let node = this.#focus[0].node;
+for (let i=0; i<this.#focus.length-1; i++) {
+node = node.children[this.#focus[i].index];
+} // for
+
+node.focus();
+} // if
+}// render
+
+} // class
+
+const ui = new Reactive(data);
+document.querySelector("main").appendChild(ui.ui());
+
+function ancestors (start, root = document.body) {
+if (start instanceof Element && root instanceof Element && root.contains(start)) {
+const path = [start];
+do {
+start = start.parentElement;
+path.push(start);
+} while (start !== root);
+
+return path;
+} // if
+} // ancestors
+
+function random (n1,n2) {
+return Math.floor(Math.random()*(n2-n1) + n1);
+} // random
+
+function not (x) {return !x;}
+</script>
+
+
+</body>
+</html>

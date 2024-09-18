@@ -1,27 +1,52 @@
 <!DOCTYPE HTML>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>New Meeting Time</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="Accessible Meeting Time Tool">
+
+<title>MeetingTime A11y | Educause</title>
+
 <link rel="shortcut icon" href="#" type="image/x-icon">
-<style>
-nav ul {list-style-type: none;}
-</style>
+
+<link rel="stylesheet" href="bootstrap.css">
+<script src="bootstrap-5.3.3.min.js"></script>
 </head>
 <body>
+<div class="page container">
 
-<nav><ul><li>
-<button data-action="display-instructions" accesskey="h">Instructions</button>
-</li><li>
-<button data-action="new-meeting" accesskey="n">New meeting</button>
-</li><li>
-<button data-action="update-meeting" accesskey="u">Update meeting</button>
-</li></ul>
 
-<main>
+<div class="py-md-5 my-5 text-center">
+<h1 class="display-4 fw-bold text-body-emphasis" id="meetingtime">MeetingTime A11y</h1>
+<p class="lead">The accessible solution for coordinating&nbsp;schedules.</p>
+<nav class="d-md-flex justify-content-center m-4">
+<ul class="nav flex-column flex-md-row gap-4">
+<li class="nav-item d-grid">
+    <a data-action="display-instructions" href="#" class="btn btn-outline-primary btn-lg px-4" accesskey="h">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-info-square" viewBox="0 0 20 20"><path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>
+    Instructions</a>
+</li>
+<li class="nav-item d-grid">
+    <a data-action="new-meeting" href="#" class="btn btn-success btn-lg px-4" accesskey="n">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 20 20"><path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/></svg>
+    New meeting</a>
+</li>
+<li class="nav-item d-grid">
+    <a data-action="update-meeting" href="#" class="btn btn-primary btn-lg px-4" accesskey="u">
+    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 20 20"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5z"/></svg>
+    Update meeting</a>
+</li>
+</ul>
+</nav>
+</div>
+
+<main class="container">
 </main>
 
 <output id="status"></output>
+</div><!-- .page -->
+
 
 <script>
 const origin = "";
@@ -45,29 +70,39 @@ proposals: [
 ]});
 
 const instructions = `
-<div class="instructions">
-<h1 id="meetingtime">MeetingTime</h1>
-<p>This webapp is meant to help coordinate events such as online meetings among several remote participants. It is designed to store only data about the event which is absolutely necessary for it's function. Users do not need to create accounts or provide eMail addresses to use the app!</p>
-<h2 id="operation">Operation</h2>
+<div id="instructions" class="card border-primary mb-5">
+<h2 class="card-header h5 text-primary">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-info-square" viewBox="0 0 20 20"><path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>
+Instructions
+</h2> 
+<div class="card-body">
+<p class="display-6">Built for everyone. Available to all.</p>
 <ul>
-<li>Click "New meeting" to create an entry
-<ul>
-<li>the URL shown as the meeting ID must be copied and saved</li>
-<li>the creator is responsible for providing this URL to all other participants</li>
-<li>click "submit" to create the entry</li>
-</ul></li>
-<li>Updating
-<ul>
-<li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
-<li>when data loaded, proposals sort with highest vote count first</li>
-<li>Click "update meeting" to update the entry</li>
-</ul></li>
-<li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
+<li>You do not need to create an account.</li>
+<li>No email address required.</li>
+<li>No unnecessary data is saved.</li>
 </ul>
-<h2 id="concurrent-updates">Concurrent updates</h2>
-<p>If another user updates the meeting you are currently updating, a warning is generated and the entry is reloaded displaying the changes entered by the other user, possibly overwriting any changes you may have made. This shouldn't happen often, and the amount of data lost is minimal, essentially any timeslot proposals you may have voted on would be lost.</p>
+<h3 id="coordinator" class="h5">Meeting coordinator</h3>
+<ul>
+<li>Click "New meeting" to get started.</li>
+<li>The URL provided as the meeting ID must be copied and saved.</li>
+<li>The creator is responsible for sharing this URL with all other participants.</li>
+<li>Click "Submit" to create the meeting survey.</li>
+</ul>
+<h3 id="participants" class="h5">Meeting participants</h3>
+<ul>
+<li>Anyone with the URL can update the meeting with new timeslot proposals.</li>
+<li>They can also vote on existing proposals, which increases that item's vote count by one.</li>
+<li>Proposals sort with highest vote count first.</li>
+<li>Click "Submit" to save changes.</li>
+</ul>
+<h3 id="concurrent-updates" class="h5">Concurrent updates</h3>
+<p>Your work may be interrupted by a warning message if another person submits an update to the meeting you are editing. The display will refresh and any changes you did not yet submit will be overwritten. This shouldn't happen often, and the amount of data lost is minimal.</p>
+<h3 id="inactive-removal" class="h5">Inactive removal</h3>
+<p>Meeting surveys are automatically removed if inactive for 7 days (i.e. no updates are submitted).</p>
 </div>
-`;
+</div>
+`; // instructions
 
 let ui = null;
 
@@ -338,25 +373,58 @@ toString () {
 const id = this.#data.id;
 
 return `
-<div class="meeting">
-<h1>${this.#type} meeting</h1>
+<div class="meeting card border-success mb-5">
+<h2 class="card-header bg-success text-white h5">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-plus-square-fill" viewBox="0 0 20 20"><path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0"/></svg>
+         ${this.#type} meeting
+</h2>
 
+<div class="card-body">
 <form>
-<div><label>Meeting info:<br>
-<textarea required data-name="meeting-info" rows="5" cols="80">
+
+<div class="col-lg-8">
+<label for="meeting-info" class="form-label mb-0">Meeting info</label>
+<textarea id="meeting-info" class="form-control border-dark" required data-name="meeting-info" rows="5" cols="80">
 ${this.#data.info}
 </textarea>
 </div>
 
-<fieldset class="new-proposal"><legend><h3>New proposal</h3></legend>
-<label>Date: <input data-name="date" type="date"></label>
-<br><label>Time: <input data-name="time" type="time"></label>
-<br><button data-action="add-proposal" type="button">Add proposal</button>
-</fieldset>
 <hr>
-<h3>Proposed Timeslots</h3>
-<table class="proposals"><thead>
-<tr><th>vote</th>
+
+<fieldset class="new-proposal pt-3">
+<legend class="mb-0"><h3>Initial timeslots for meeting (optional)</h3></legend>
+
+<div class="row">
+	
+<div class="col-12 col-sm-6 col-md-4 col-lg-3">
+<label class="form-label" for="new-date">Date</label>
+<input id="new-date" data-name="date" type="date" class="form-control border-dark">
+</div>
+
+<div class="col-12 col-sm-6 col-md-4 col-lg-2 mt-3 mt-sm-0">
+<label class="form-label" for="new-time">Time</label>
+<input id="new-time" data-name="date" type="date" class="form-control border-dark">
+</div>
+
+<div class="col text-center text-md-start">
+	<button data-action="add-proposal" type="button" class="btn btn-light border-primary" >
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg>Add option
+Add timeslot
+</button>
+</div></div>
+</fieldset>
+
+<hr>
+<h3 class="h4 mb-0 pt-3">Proposed time slots</h3>
+
+<div class="form-text mb-3">
+Preview your meeting's proposed time slots.
+To add a time slot, populate the fields in the <strong>Initial time slot options</strong> and click the <strong>Add timeslot</strong> button.
+</div>
+                
+<table class="proposals table table-striped text-center">
+                <thead><tr>
+<th>vote</th>
 <th>count</th>
 <th>date</th>
 <th>time</th>
@@ -365,14 +433,32 @@ ${this.#data.info}
 ${this.#data.proposals.sort(orderByVoteCount).map(createProposal)}
 </tbody></table>
 
+<!-- this field only shows for new meetings; not needed when updating existing meetings -->
 <div ${this.#type === "update"? "hidden" : ""}>
-<label>Meeting ID: <input data-name="meeting-id" readonly data-value="${id}" value="${generateUrl(id)}"></label>
-<span id="id-description">copy to clipboard and eMail to other participants</span>
+                <h3 class="h4 mb-0 pt-3">Submit and share your meeting</h3>
+                <ol class="form-text">
+                    <li>Copy the <strong>Meeting ID</strong> link below.</li>
+                    <li><strong>Important:</strong> Save the Meeting ID link. You will need to refer to it later.</li>
+                    <li>Click the <strong>Submit</strong> button to create your meeting survey.</li>
+                    <li>Share the Meeting ID link with your participants.</li>
+                </ol>
+
+<div class="col-lg-8 pb-3">
+<label for="meeting-id" class="form-label">Meeting ID:</label>
+                <input id="meeting-id" data-name="meeting-id" readonly type="text" aria-describedby="meeting-id-description" class="form-control border-primary" data-value="${id}" value="${generateUrl(id)}">
+<span id="meeting-id-description">copy to clipboard and eMail to other participants</span>
+</div>
 </div>
 
 
-<div><button type="button" data-action="save-meeting-data">${this.#type} meeting</button></div>
-</form></div>
+<div class="text-center my-4">
+                <button type="button" data-action="save-meeting-data" class="btn btn-lg btn-success">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-check-lg" viewBox="0 0 20 20"><path d="M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425z"/></svg>
+${this.#type} meeting
+</button>
+</div>
+</form>
+</div></div>
 `; // meetingTemplate
 
 function createProposal (proposal, count) {
