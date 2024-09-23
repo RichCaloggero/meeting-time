@@ -538,8 +538,7 @@ if (text) setTimeout(() => document.querySelector("#status").textContent = text,
 } // statusMessage
 
 function generateUrl (id) {
-const url = location.toString();
-return id? `${url.split("?")[0]}?update=${id}` : url.split("?")[0];
+return id? `${location.origin}${location.pathname}?update=${id}` : location.toString();
 } // generateUrl
 
 function toTimestamp (date, time) {
