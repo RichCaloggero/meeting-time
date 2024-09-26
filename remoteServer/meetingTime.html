@@ -24,7 +24,7 @@ nav ul {list-style-type: none;}
 <output id="status"></output>
 
 <script>
-const origin = "/meetingTime";
+const origin = "";
 const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
@@ -59,8 +59,8 @@ const instructions = `
 <li>Updating
 <ul>
 <li>anyone with the URL can update the meeting with new timeslot proposals, as well as vote on existing proposals which increases their vote count by one</li>
-<li>proposals sort with highest vote count first</li>
-<li>Click "submit" to update the entry</li>
+<li>when data loaded, proposals sort with highest vote count first</li>
+<li>Click "update meeting" to update the entry</li>
 </ul></li>
 <li>entries are automatically removed after they remain static for 7 days (i.e. not updated)</li>
 </ul>
@@ -240,12 +240,11 @@ id: "",
 info: "",
 proposals: []
 };
-#options = {
-};
 #ui = null;
 #events = null;
+#focusSelector = "";
 
-constructor (data, options = {}) {
+constructor (data) {
 if (data && data instanceof Object) {
 this.#data = data;
 this.#type = "update";
@@ -258,6 +257,7 @@ this.#initEvents ({
 "add-proposal": this.#addProposal,
 vote: ["change", this.#vote],
 "save-meeting-data": this.#saveMeetingData,
+"copy-url": this.#copyUrl,
 });
 } // constructor
 
@@ -268,6 +268,10 @@ this.#data.info = e.target.value;
 return true;
 } // #changeMeetingInfo 
 
+#focus (selector = "") {
+this.#focusSelector = selector;
+} // #focus
+
 #saveMeetingData () {
 for (const p of this.#data.proposals) {
 delete p.alreadyVoted;
@@ -277,7 +281,7 @@ delete p.id;
 meetings.set(this.id, this.#data);
 sendMeetingData(this.#data);
 //console.log("saved...");
-return true; // do not rerender
+return true; // do not rerender to preserve vote checkboxes
 } // saveMeetingData
 
 
@@ -307,7 +311,7 @@ return;
 } // if
 
 proposals.push({
-id: `pid-${proposals.length}`, alreadyVoted: true, voteCount: 1, timestamp
+alreadyVoted: true, voteCount: 1, timestamp
 });
 } // addProposal
 
@@ -327,6 +331,17 @@ if (this.#type === "new") p.alreadyVoted = true;
 
 return true; // no rerender
 } // vote
+
+async #copyUrl (e) {
+try {
+await navigator.clipboard.writeText(valueOf("meeting-id"));
+disableBriefly(e.target);
+statusMessage("URL copied; share with other participants");
+} catch (err) {
+console.error(err.name, err.message);
+alert(`${err.name}, ${err.message}`);
+} // try
+} // copyUrl
 
 ui () {return this.#ui;}
 
@@ -365,10 +380,13 @@ ${this.#data.proposals.sort(orderByVoteCount).map(createProposal)}
 <div ${this.#type === "update"? "hidden" : ""}>
 <label>Meeting ID: <input data-name="meeting-id" readonly data-value="${id}" value="${generateUrl(id)}"></label>
 <span id="id-description">copy to clipboard and eMail to other participants</span>
+<button type="button" data-action="copy-url">Copy to clipboard</button>
 </div>
 
-
-<div><button type="button" data-action="save-meeting-data">${this.#type} meeting</button></div>
+<div>
+<button type="button" data-action="save-meeting-data">
+Save ${this.#type === "new"? "new" : "updated"} meeting
+</button></div>
 </form></div>
 `; // meetingTemplate
 
@@ -413,7 +431,9 @@ const handleEvent = this.#events[name];
 let [type, handler] = handleEvent instanceof Array?
 handleEvent : ["click", handleEvent];
 if (e.type === type) {
-if (not(handler.call(this, e))) this.#render(); // do not rerender if handler returns truthy
+if (not(handler.call(this, e))) {  // do not rerender if handler returns truthy
+this.#render();
+} // if
 } // if
 } // if
 } // handleEvent
@@ -427,6 +447,11 @@ this.#render();
 
 #render () {
 this.#ui.innerHTML = this.toString(); 
+if (this.#focusSelector && $ui(this.#focusSelector)) {
+$ui(this.#focusSelector).focus();
+} // if
+
+this.#focusSelector = "";
 } // #render
 } // class MeetingUI
 
@@ -537,6 +562,13 @@ return Date.parse(`${date} ${time}`);
 
 function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
 function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
+
+function disableBriefly (element) {
+if (element) {
+element.setAttribute("disabled", "true");
+setTimeout(() => element.removeAttribute("disabled"), 2000);
+} // if
+} // disableBriefly
 
 function $ui (id, context = document) {
 const _$ui = id instanceof Element? id : context.querySelector(`${id}, [data-name='${id}'], [data-action='${id}']`);

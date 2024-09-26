@@ -50,7 +50,7 @@
 
 
 <script>
-const origin = "/meetingTime";
+const origin = "";
 const $nav = $("nav");
 const $main = $("main");
 const $status = $("#status");
@@ -293,6 +293,7 @@ this.#initEvents ({
 "add-proposal": this.#addProposal,
 vote: ["change", this.#vote],
 "save-meeting-data": this.#saveMeetingData,
+"copy-url": this.#copyUrl,
 });
 } // constructor
 
@@ -366,6 +367,17 @@ if (this.#type === "new") p.alreadyVoted = true;
 
 return true; // no rerender
 } // vote
+
+async #copyUrl (e) {
+try {
+await navigator.clipboard.writeText(valueOf("meeting-id"));
+disableBriefly(e.target);
+statusMessage("URL copied; share with other participants");
+} catch (err) {
+console.error(err.name, err.message);
+statusMessage(`${err.name}, ${err.message}`);
+} // try
+} // copyUrl
 
 ui () {return this.#ui;}
 
@@ -448,6 +460,7 @@ ${this.#data.proposals.sort(orderByVoteCount).map(createProposal)}
 <label for="meeting-id" class="form-label">Meeting ID:</label>
                 <input id="meeting-id" data-name="meeting-id" readonly type="text" aria-describedby="meeting-id-description" class="form-control border-primary" data-value="${id}" value="${generateUrl(id)}">
 <span id="meeting-id-description">copy to clipboard and eMail to other participants</span>
+<button type="button" data-action="copy-url" class="btn btn-lg btn-success">Copy to clipboard</button>
 </div>
 </div>
 
@@ -634,6 +647,14 @@ return Date.parse(`${date} ${time}`);
 
 function toDate(timestamp) {return new Date(timestamp).toLocaleDateString();} // toDate
 function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} // toDate
+
+function disableBriefly (element) {
+if (element) {
+element.setAttribute("disabled", "true");
+setTimeout(() => element.removeAttribute("disabled"), 2000);
+} // if
+} // disableBriefly
+
 
 function $ui (id, context = document) {
 const _$ui = id instanceof Element? id : context.querySelector(`${id}, [data-name='${id}'], [data-action='${id}']`);
