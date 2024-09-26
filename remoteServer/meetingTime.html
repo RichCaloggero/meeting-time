@@ -14,8 +14,6 @@ nav ul {list-style-type: none;}
 <button data-action="display-instructions" accesskey="h">Instructions</button>
 </li><li>
 <button data-action="new-meeting" accesskey="n">New meeting</button>
-</li><li>
-<button data-action="update-meeting" accesskey="u">Update meeting</button>
 </li></ul>
 
 <main>
@@ -135,8 +133,6 @@ return false;
 if (not(ui)) ui = new MeetingUI(meetings.get(id));
 document.querySelector("main")
 .appendChild(ui.ui());
-$ui("update-meeting").hidden = false;
-$ui("update-meeting").setAttribute("aria-current", "page");
 $ui("meeting-info").focus();
 } // updateMeeting
 

@@ -171,8 +171,6 @@ return false;
 if (not(ui)) ui = new MeetingUI(meetings.get(id));
 document.querySelector("main")
 .appendChild(ui.ui());
-$ui("update-meeting").hidden = false;
-$ui("update-meeting").setAttribute("aria-current", "page");
 $ui("meeting-info").focus();
 } // updateMeeting
 
