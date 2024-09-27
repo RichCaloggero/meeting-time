@@ -315,6 +315,9 @@ delete p.id;
 meetings.set(this.id, this.#data);
 sendMeetingData(this.#data);
 //console.log("saved...");
+disableBriefly($ui("save-meeting-data"));
+
+
 return true; // do not rerender to preserve vote checkboxes
 } // saveMeetingData
 
@@ -649,7 +652,10 @@ function toTime(timestamp) {return new Date(timestamp).toLocaleTimeString();} //
 function disableBriefly (element) {
 if (element) {
 element.setAttribute("disabled", "true");
-setTimeout(() => element.removeAttribute("disabled"), 2000);
+setTimeout(() => {
+element.removeAttribute("disabled")
+element.focus();
+}, 2000);
 } // if
 } // disableBriefly
 
