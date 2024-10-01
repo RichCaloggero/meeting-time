@@ -86,21 +86,21 @@ Instructions
 <h3 id="coordinator" class="h5">Meeting coordinator</h3>
 <ul>
 <li>Click "New meeting" to get started.</li>
-<li>The URL provided as the meeting ID must be copied and saved.</li>
-<li>The creator is responsible for sharing this URL with all other participants.</li>
-<li>Click "Submit" to create the meeting survey.</li>
+<li>The URL provided as the meeting ID must be saved and shared with other participants.</li>
+<li>The creator is responsible for sharing this URL; it is copied to the clipboard when meeting is saved.</li>
+<li>Be sure to click "Save new meeting" to create the entry on the server.</li>
 </ul>
 <h3 id="participants" class="h5">Meeting participants</h3>
 <ul>
 <li>Anyone with the URL can update the meeting with new timeslot proposals.</li>
 <li>They can also vote on existing proposals, which increases that item's vote count by one.</li>
 <li>Proposals sort with highest vote count first.</li>
-<li>Click "Submit" to save changes.</li>
+<li>Click "Update meeting" to save changes.</li>
 </ul>
 <h3 id="concurrent-updates" class="h5">Concurrent updates</h3>
 <p>Your work may be interrupted by a warning message if another person submits an update to the meeting you are editing. The display will refresh and any changes you did not yet submit will be overwritten. This shouldn't happen often, and the amount of data lost is minimal.</p>
 <h3 id="inactive-removal" class="h5">Inactive removal</h3>
-<p>Meeting surveys are automatically removed if inactive for 7 days (i.e. no updates are submitted).</p>
+<p>Entries are automatically removed from the server if inactive for 7 days (i.e. no updates are submitted).</p>
 </div>
 </div>
 `; // instructions
@@ -424,7 +424,7 @@ ${this.#data.info}
 <hr>
 
 <fieldset class="new-proposal pt-3">
-<legend class="mb-0"><h3>Initial timeslots for meeting (optional)</h3></legend>
+<legend class="mb-0"><h3>Propose timeslots for meeting (optional)</h3></legend>
 
 <div class="row">
 
@@ -437,8 +437,10 @@ ${this.#data.info}
 <label class="form-label" for="new-time">Time</label>
 <input id="new-time" data-name="time" type="time" class="form-control border-dark">
 </div>
+</div><!-- .row -->
 
-<br><br><div class="col text-center text-md-start">
+<div class="row">
+<div class="col text-center text-md-start">
 <button data-action="add-proposal" type="button" class="btn btn-light border-primary" >
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2"/></svg>
 Add timeslot proposal
